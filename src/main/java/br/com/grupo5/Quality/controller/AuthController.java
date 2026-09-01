@@ -24,12 +24,12 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    @ResponseStatus(HttpStatus.CREATED)
-    public void login(@RequestBody UsuarioLoginRequestDTO dto) throws Exception {
-        authService.login(dto);
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public TokenResponseDTO login(@RequestBody UsuarioLoginRequestDTO dto) throws Exception {
+        return authService.login(dto);
     }
 
-    @PostMapping("/refresh")
+    @PatchMapping("/refresh")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public TokenResponseDTO refreshToken(Authentication authentication) {
         return authService.refreshToken(authentication);
