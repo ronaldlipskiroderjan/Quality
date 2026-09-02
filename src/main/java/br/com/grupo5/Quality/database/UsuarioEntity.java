@@ -37,6 +37,12 @@ public class UsuarioEntity implements UserDetails {
     @Column(name = "criado_em", nullable = false)
     private LocalDateTime criadoEm;
 
+    private String contentType;
+
+    @Lob
+    @Column(columnDefinition = "BYTEA")
+    private byte[] fotoPerfil;
+
     @OneToMany(mappedBy = "auditor", fetch = FetchType.LAZY)
     private Set<ArtefatoEntity> artefatos;
 
