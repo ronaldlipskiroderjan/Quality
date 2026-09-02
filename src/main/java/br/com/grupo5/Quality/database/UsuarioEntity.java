@@ -40,7 +40,7 @@ public class UsuarioEntity implements UserDetails {
     private String contentType;
 
     @Lob
-    @Column(columnDefinition = "BYTEA")
+    @Column(columnDefinition = "BYTEA", insertable = false)
     private byte[] fotoPerfil;
 
     @OneToMany(mappedBy = "auditor", fetch = FetchType.LAZY)

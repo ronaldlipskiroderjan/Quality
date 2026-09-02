@@ -10,6 +10,11 @@ spring:
   jpa:
     hibernate:
       ddl-auto: ${DDL_AUTO:update}
+    properties:
+      hibernate:
+        jdbc:
+          lob:
+            non_contextual_creation: true
   servlet:
     multipart:
       enabled: true
