@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 @Entity
-@Table(name = "usuarios")
+@Table(name = "Usuarios")
 @Getter
 @Setter
 @Builder
@@ -32,7 +32,7 @@ public class UsuarioEntity implements UserDetails {
     private String senhaHash;
 
     @Column(nullable = false)
-    private boolean ativo = true;
+    private boolean ativo;
 
     @Column(name = "criado_em", nullable = false)
     private LocalDateTime criadoEm;
@@ -40,7 +40,7 @@ public class UsuarioEntity implements UserDetails {
     private String contentType;
 
     @Lob
-    @Column(columnDefinition = "BYTEA")
+    @Column(columnDefinition = "BYTEA", insertable = false)
     private byte[] fotoPerfil;
 
     @OneToMany(mappedBy = "auditor", fetch = FetchType.LAZY)
@@ -49,7 +49,7 @@ public class UsuarioEntity implements UserDetails {
     @OneToMany(mappedBy = "responsavel", fetch = FetchType.LAZY)
     private Set<ItemChecklistEntity> naoConformidades;
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "usuario_planos",
             joinColumns = @JoinColumn(name = "usuario_id"),

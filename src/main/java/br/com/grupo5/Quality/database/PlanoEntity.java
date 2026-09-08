@@ -11,7 +11,7 @@ import java.util.Set;
 import java.util.UUID;
 
 @Entity
-@Table
+@Table(name = "planos")
 @Getter
 @Setter
 @Builder
@@ -22,9 +22,6 @@ public class PlanoEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
-
-    @Column(name = "nome_criador", nullable = false)
-    private String criador;
 
     @Column(nullable = false)
     private String nomeProjeto;
