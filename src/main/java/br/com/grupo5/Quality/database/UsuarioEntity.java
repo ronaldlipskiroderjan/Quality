@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 @Entity
-@Table(name = "usuarios")
+@Table(name = "Usuarios")
 @Getter
 @Setter
 @Builder
@@ -49,7 +49,7 @@ public class UsuarioEntity implements UserDetails {
     @OneToMany(mappedBy = "responsavel", fetch = FetchType.LAZY)
     private Set<ItemChecklistEntity> naoConformidades;
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "usuario_planos",
             joinColumns = @JoinColumn(name = "usuario_id"),
