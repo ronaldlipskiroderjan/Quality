@@ -68,11 +68,12 @@ public class UsuarioService {
     public void updatePassword(Authentication authentication, PasswordRequestDTO dto) throws Exception {
         UsuarioEntity usuario = usuarioRepository.findByEmailIgnoreCase(authentication.getName())
                 .orElseThrow(() -> new NotFoundException("Usuário não econtrado..."));
-        if (Objects.equals(usuario.getSenhaHash(), dto.senhaAntiga()) && Objects.equals(dto.novaSenha(), dto.confirmacaoSenha())) {
+        if (passwordEncoder.matches(dto.senhaAntiga(), usuario.getSenhaHash())) {
             usuario.setSenhaHash(passwordEncoder.encode(dto.novaSenha()));
         } else {
             throw new BadRequestException("As Senhas não correspondem...");
         }
+        usuarioRepository.save(usuario);
     }
 
     public void updateMe(Authentication authentication, UsuarioUpdateRequestDTO dto) throws Exception {

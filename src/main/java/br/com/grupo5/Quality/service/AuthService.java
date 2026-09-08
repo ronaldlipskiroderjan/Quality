@@ -20,6 +20,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.util.Set;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -30,11 +33,11 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final TokenProvider tokenProvider;
 
-    public void register(UsuarioRequestDTO dto) throws Exception{
+    public void register(UsuarioRequestDTO dto) throws Exception {
         if (usuarioRepository.existsByEmailIgnoreCase(dto.email())) {
             throw new AlreadyExistsException("Usuário já cadastrado...");
         }
-        RoleEntity roleEntity = roleRepository.findByNome(RoleTypeEnum.ROLE_USER.name())
+        RoleEntity user = roleRepository.findByNome(RoleTypeEnum.ROLE_USER.name())
                 .orElseGet(()-> roleRepository.save(RoleEntity.builder()
                         .nome(RoleTypeEnum.ROLE_USER.name())
                         .build()));
@@ -42,6 +45,9 @@ public class AuthService {
                         .nome(dto.nome())
                         .email(dto.email())
                         .senhaHash(passwordEncoder.encode(dto.senha()))
+                        .roles(Set.of(user))
+                        .ativo(true)
+                        .criadoEm(LocalDateTime.now())
                 .build());
     }
 

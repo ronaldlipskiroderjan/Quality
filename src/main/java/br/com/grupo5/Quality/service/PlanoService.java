@@ -29,6 +29,8 @@ public class PlanoService {
     private final UsuarioRepository usuarioRepository;
 
     public void create(Authentication authentication, PlanoRequestDTO dto) throws Exception {
+        UsuarioEntity usuario = usuarioRepository.findByEmailIgnoreCase(authentication.getName())
+                .orElseThrow(() -> new NotFoundException("Plano não encontrado"));
         PlanoEntity newPlano = planoRepository.save(PlanoEntity.builder()
                         .nomeProjeto(dto.nomeProjeto())
                         .versao(dto.versao())
@@ -37,9 +39,7 @@ public class PlanoService {
                         .status(Status.PENDENTE)
                         .criadoEm(LocalDateTime.now())
                 .build());
-        UsuarioEntity usuario = usuarioRepository.findByEmailIgnoreCase(authentication.getName())
-                .orElseThrow(() -> new NotFoundException("Plano não encontrado"));
-        usuario.setPlanos(Set.of(newPlano));
+        usuario.getPlanos().add(newPlano);
         usuarioRepository.save(usuario);
     }
 

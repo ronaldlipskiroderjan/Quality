@@ -32,7 +32,7 @@ public class UsuarioEntity implements UserDetails {
     private String senhaHash;
 
     @Column(nullable = false)
-    private boolean ativo = true;
+    private boolean ativo;
 
     @Column(name = "criado_em", nullable = false)
     private LocalDateTime criadoEm;
