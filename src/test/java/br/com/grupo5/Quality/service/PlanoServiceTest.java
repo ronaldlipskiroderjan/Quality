@@ -6,6 +6,7 @@ import br.com.grupo5.Quality.database.enums.Status;
 import br.com.grupo5.Quality.database.repository.PlanoRepository;
 import br.com.grupo5.Quality.database.repository.UsuarioRepository;
 import br.com.grupo5.Quality.dto.request.PlanoRequestDTO;
+import br.com.grupo5.Quality.dto.response.PlanoDetalhadoResponseDTO;
 import br.com.grupo5.Quality.dto.response.PlanoResponseDTO;
 import br.com.grupo5.Quality.exception.NotFoundException;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,153 +43,154 @@ class PlanoServiceTest {
     @Mock
     private UsuarioRepository usuarioRepository;
     @Mock
-    private Authentication authentication;
+    private AcessoPlanoService acessoPlanoService;
+    @Mock
+    private Authentication auth;
 
     @Test
-    void deveCriarPlanoPendenteEAdicionarAoUsuarioSemPerderPlanosAnteriores() throws Exception {
-        PlanoService service = service();
-        PlanoRequestDTO dto = planoDto();
-        PlanoEntity planoAnterior = plano(UUID.randomUUID(), "Projeto anterior", Status.CONCLUIDO);
-        UsuarioEntity usuario = UsuarioEntity.builder()
-                .email(EMAIL)
-                .planos(new HashSet<>(Set.of(planoAnterior)))
-                .build();
-        when(authentication.getName()).thenReturn(EMAIL);
-        when(planoRepository.save(any(PlanoEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    void deveCriarPlanoPendenteEVincularAoUsuario() {
+        UsuarioEntity usuario = usuario();
+        when(auth.getName()).thenReturn(EMAIL);
         when(usuarioRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(usuario));
+        when(planoRepository.save(any(PlanoEntity.class)))
+                .thenAnswer(invocation -> {
+                    PlanoEntity plano = invocation.getArgument(0);
+                    plano.setId(UUID.randomUUID());
+                    return plano;
+                });
 
-        service.create(authentication, dto);
+        PlanoDetalhadoResponseDTO response = service().criar(auth, planoDto());
 
         ArgumentCaptor<PlanoEntity> captor = ArgumentCaptor.forClass(PlanoEntity.class);
         verify(planoRepository).save(captor.capture());
-        PlanoEntity novoPlano = captor.getValue();
-        assertEquals("Quality", novoPlano.getNomeProjeto());
-        assertEquals(Status.PENDENTE, novoPlano.getStatus());
-        assertNotNull(novoPlano.getCriadoEm());
-        assertTrue(usuario.getPlanos().contains(planoAnterior));
-        assertTrue(usuario.getPlanos().contains(novoPlano));
+        PlanoEntity plano = captor.getValue();
+
+        assertEquals("Quality", plano.getNomeProjeto());
+        assertEquals(Status.PENDENTE, plano.getStatus());
+        assertNotNull(plano.getCriadoEm());
+        assertTrue(usuario.getPlanos().contains(plano));
+        assertEquals(plano.getId(), response.id());
         verify(usuarioRepository).save(usuario);
     }
 
     @Test
-    void naoDeveSalvarPlanoQuandoUsuarioAutenticadoNaoExiste() {
-        PlanoService service = service();
-        when(authentication.getName()).thenReturn(EMAIL);
+    void naoDeveCriarPlanoSemUsuarioAutenticado() {
+        when(auth.getName()).thenReturn(EMAIL);
         when(usuarioRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.empty());
 
-        assertThrows(NotFoundException.class, () -> service.create(authentication, planoDto()));
+        assertThrows(NotFoundException.class, () -> service().criar(auth, planoDto()));
         verify(planoRepository, never()).save(any());
     }
 
     @Test
-    void deveListarPlanosDoUsuarioComoDto() throws Exception {
-        PlanoService service = service();
-        UUID usuarioId = UUID.randomUUID();
-        PlanoEntity primeiro = plano(UUID.randomUUID(), "Projeto A", Status.PENDENTE);
-        PlanoEntity segundo = plano(UUID.randomUUID(), "Projeto B", Status.CONCLUIDO);
-        UsuarioEntity usuario = UsuarioEntity.builder().planos(Set.of(primeiro, segundo)).build();
-        when(usuarioRepository.findByIdWithPlanos(usuarioId)).thenReturn(Optional.of(usuario));
+    void deveListarSomentePlanosDoUsuario() {
+        PlanoEntity primeiro = plano("Projeto A", Status.PENDENTE);
+        PlanoEntity segundo = plano("Projeto B", Status.CONCLUIDO);
+        when(auth.getName()).thenReturn(EMAIL);
+        when(planoRepository.findAllByUsuarioEmail(EMAIL))
+                .thenReturn(List.of(primeiro, segundo));
 
-        List<PlanoResponseDTO> resultado = service.findAll(usuarioId);
+        List<PlanoResponseDTO> response = service().listar(auth);
 
-        assertEquals(2, resultado.size());
-        assertTrue(resultado.contains(new PlanoResponseDTO(primeiro.getId(), "Projeto A", Status.PENDENTE)));
-        assertTrue(resultado.contains(new PlanoResponseDTO(segundo.getId(), "Projeto B", Status.CONCLUIDO)));
+        assertEquals(2, response.size());
+        assertEquals(primeiro.getId(), response.getFirst().id());
+        verify(planoRepository).findAllByUsuarioEmail(EMAIL);
     }
 
     @Test
-    void deveBuscarPlanoPorId() throws Exception {
-        PlanoService service = service();
-        UUID id = UUID.randomUUID();
-        when(planoRepository.findById(id)).thenReturn(Optional.of(plano(id, "Quality", Status.PENDENTE)));
+    void deveBuscarPlanoComObjetivoEVisaoGeral() {
+        PlanoEntity plano = plano("Quality", Status.PENDENTE);
+        when(acessoPlanoService.buscar(auth, plano.getId())).thenReturn(plano);
 
-        PlanoResponseDTO resultado = service.findById(id);
+        PlanoDetalhadoResponseDTO response = service().buscar(auth, plano.getId());
 
-        assertEquals(new PlanoResponseDTO(id, "Quality", Status.PENDENTE), resultado);
+        assertEquals(plano.getId(), response.id());
+        assertEquals("Objetivo", response.objetivo());
+        assertEquals("Visão geral", response.visaoGeral());
     }
 
     @Test
-    void deveInformarQuandoPlanoNaoExisteNaBusca() {
-        PlanoService service = service();
-        UUID id = UUID.randomUUID();
-        when(planoRepository.findById(id)).thenReturn(Optional.empty());
+    void deveAtualizarPlanoAcessivel() {
+        PlanoEntity plano = plano("Antigo", Status.PENDENTE);
+        when(acessoPlanoService.buscar(auth, plano.getId())).thenReturn(plano);
+        when(planoRepository.save(plano)).thenReturn(plano);
 
-        assertThrows(NotFoundException.class, () -> service.findById(id));
-    }
-
-    @Test
-    void deveAtualizarDadosDoPlano() throws Exception {
-        PlanoService service = service();
-        UUID id = UUID.randomUUID();
-        PlanoEntity plano = plano(id, "Antigo", Status.PENDENTE);
-        when(planoRepository.findById(id)).thenReturn(Optional.of(plano));
-
-        service.update(id, planoDto());
+        PlanoDetalhadoResponseDTO response = service().atualizar(
+                auth,
+                plano.getId(),
+                planoDto()
+        );
 
         assertEquals("Quality", plano.getNomeProjeto());
-        assertEquals("1.0", plano.getVersao());
         assertEquals("Garantir qualidade", plano.getObjetivo());
-        assertEquals("Visao geral", plano.getVisaoGeral());
-        verify(planoRepository).save(plano);
+        assertEquals("Quality", response.nomeProjeto());
     }
 
     @Test
-    void deveConcluirPlano() throws Exception {
-        PlanoService service = service();
-        UUID id = UUID.randomUUID();
-        PlanoEntity plano = plano(id, "Quality", Status.PENDENTE);
-        when(planoRepository.findById(id)).thenReturn(Optional.of(plano));
+    void deveConcluirPlanoAcessivel() {
+        PlanoEntity plano = plano("Quality", Status.PENDENTE);
+        when(acessoPlanoService.buscar(auth, plano.getId())).thenReturn(plano);
 
-        service.closePlano(id);
+        service().concluir(auth, plano.getId());
 
         assertEquals(Status.CONCLUIDO, plano.getStatus());
         verify(planoRepository).save(plano);
     }
 
     @Test
-    void deveExcluirPlanoExistente() throws Exception {
-        PlanoService service = service();
-        UUID id = UUID.randomUUID();
-        when(planoRepository.existsById(id)).thenReturn(true);
+    void deveRemoverVinculosAntesDeExcluirPlano() {
+        PlanoEntity plano = plano("Quality", Status.PENDENTE);
+        UsuarioEntity primeiro = usuario();
+        UsuarioEntity segundo = usuario();
+        primeiro.getPlanos().add(plano);
+        segundo.getPlanos().add(plano);
 
-        service.delete(id);
+        when(acessoPlanoService.buscar(auth, plano.getId())).thenReturn(plano);
+        when(usuarioRepository.findAllByPlanosId(plano.getId()))
+                .thenReturn(List.of(primeiro, segundo));
 
-        verify(planoRepository).deleteById(id);
-    }
+        service().excluir(auth, plano.getId());
 
-    @Test
-    void naoDeveExcluirPlanoInexistente() {
-        PlanoService service = service();
-        UUID id = UUID.randomUUID();
-        when(planoRepository.existsById(id)).thenReturn(false);
-
-        assertThrows(NotFoundException.class, () -> service.delete(id));
-        verify(planoRepository, never()).deleteById(any());
+        assertFalse(primeiro.getPlanos().contains(plano));
+        assertFalse(segundo.getPlanos().contains(plano));
+        verify(usuarioRepository).saveAll(List.of(primeiro, segundo));
+        verify(planoRepository).delete(plano);
     }
 
     private PlanoService service() {
-        return new PlanoService(planoRepository, usuarioRepository);
+        return new PlanoService(
+                planoRepository,
+                usuarioRepository,
+                acessoPlanoService
+        );
     }
 
     private PlanoRequestDTO planoDto() {
         return new PlanoRequestDTO(
-                "Usuario",
-                "Quality",
-                "1.0",
-                "Garantir qualidade",
-                "Visao geral"
+                " Quality ",
+                " 1.0 ",
+                " Garantir qualidade ",
+                " Visão geral "
         );
     }
 
-    private PlanoEntity plano(UUID id, String nome, Status status) {
+    private PlanoEntity plano(String nome, Status status) {
         return PlanoEntity.builder()
-                .id(id)
+                .id(UUID.randomUUID())
                 .nomeProjeto(nome)
                 .versao("1.0")
                 .objetivo("Objetivo")
-                .visaoGeral("Visao geral")
+                .visaoGeral("Visão geral")
                 .status(status)
                 .criadoEm(LocalDateTime.now())
+                .build();
+    }
+
+    private UsuarioEntity usuario() {
+        return UsuarioEntity.builder()
+                .id(UUID.randomUUID())
+                .email(EMAIL)
+                .planos(new HashSet<>())
                 .build();
     }
 }

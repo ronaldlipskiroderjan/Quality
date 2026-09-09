@@ -10,15 +10,12 @@ import br.com.grupo5.Quality.dto.response.PlanoDetalhadoResponseDTO;
 import br.com.grupo5.Quality.dto.response.PlanoResponseDTO;
 import br.com.grupo5.Quality.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -27,65 +24,96 @@ public class PlanoService {
 
     private final PlanoRepository planoRepository;
     private final UsuarioRepository usuarioRepository;
+    private final AcessoPlanoService acessoPlanoService;
 
-    public void create(Authentication authentication, PlanoRequestDTO dto) throws Exception {
-        UsuarioEntity usuario = usuarioRepository.findByEmailIgnoreCase(authentication.getName())
-                .orElseThrow(() -> new NotFoundException("Plano não encontrado"));
-        PlanoEntity newPlano = planoRepository.save(PlanoEntity.builder()
-                        .nomeProjeto(dto.nomeProjeto())
-                        .versao(dto.versao())
-                        .objetivo(dto.objetivo())
-                        .visaoGeral(dto.visaoGeral())
-                        .status(Status.PENDENTE)
-                        .criadoEm(LocalDateTime.now())
-                .build());
-        usuario.getPlanos().add(newPlano);
+    @Transactional
+    public PlanoDetalhadoResponseDTO criar(Authentication auth, PlanoRequestDTO dto) {
+        UsuarioEntity usuario = buscarUsuario(auth);
+
+        PlanoEntity plano = PlanoEntity.builder()
+                .nomeProjeto(dto.nomeProjeto().trim())
+                .versao(dto.versao().trim())
+                .objetivo(dto.objetivo().trim())
+                .visaoGeral(dto.visaoGeral().trim())
+                .status(Status.PENDENTE)
+                .criadoEm(LocalDateTime.now())
+                .build();
+
+        plano = planoRepository.save(plano);
+        usuario.getPlanos().add(plano);
         usuarioRepository.save(usuario);
+
+        return toDetalhado(plano);
     }
 
-    public List<PlanoResponseDTO> findAll(UUID id) throws Exception {
-        UsuarioEntity usuario = usuarioRepository.findByIdWithPlanos(id)
-                .orElseThrow(() -> new NotFoundException("Plano não encontrado"));
-        return usuario.getPlanos().stream()
-                .map(this::toDto)
+    @Transactional(readOnly = true)
+    public List<PlanoResponseDTO> listar(Authentication auth) {
+        return planoRepository.findAllByUsuarioEmail(auth.getName()).stream()
+                .map(this::toResumo)
                 .toList();
     }
 
-    public PlanoResponseDTO findById(UUID id) throws NotFoundException {
-        return planoRepository.findById(id)
-                .map(this::toDto)
-                .orElseThrow(() -> new NotFoundException("Plano não encontrado"));
+    @Transactional(readOnly = true)
+    public PlanoDetalhadoResponseDTO buscar(Authentication auth, UUID id) {
+        return toDetalhado(acessoPlanoService.buscar(auth, id));
     }
 
-    public void update(UUID id, PlanoRequestDTO dto) throws NotFoundException {
-        PlanoEntity plano = planoRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Plano não encontrado"));
-        plano.setNomeProjeto(dto.nomeProjeto());
-        plano.setVersao(dto.versao());
-        plano.setObjetivo(dto.objetivo());
-        plano.setVisaoGeral(dto.visaoGeral());
-        planoRepository.save(plano);
+    @Transactional
+    public PlanoDetalhadoResponseDTO atualizar(
+            Authentication auth,
+            UUID id,
+            PlanoRequestDTO dto
+    ) {
+        PlanoEntity plano = acessoPlanoService.buscar(auth, id);
+        plano.setNomeProjeto(dto.nomeProjeto().trim());
+        plano.setVersao(dto.versao().trim());
+        plano.setObjetivo(dto.objetivo().trim());
+        plano.setVisaoGeral(dto.visaoGeral().trim());
+
+        return toDetalhado(planoRepository.save(plano));
     }
 
-    public void closePlano(UUID id) throws Exception{
-        PlanoEntity plano = planoRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Plano não encontrado"));
+    @Transactional
+    public void concluir(Authentication auth, UUID id) {
+        PlanoEntity plano = acessoPlanoService.buscar(auth, id);
         plano.setStatus(Status.CONCLUIDO);
         planoRepository.save(plano);
     }
 
-    public void delete(UUID id) throws Exception {
-        if (!planoRepository.existsById(id)) {
-            throw new NotFoundException("Plano não encontrado");
-        }
-        planoRepository.deleteById(id);
+    @Transactional
+    public void excluir(Authentication auth, UUID id) {
+        PlanoEntity plano = acessoPlanoService.buscar(auth, id);
+        List<UsuarioEntity> usuarios = usuarioRepository.findAllByPlanosId(id);
+
+        usuarios.forEach(usuario -> usuario.getPlanos().remove(plano));
+        usuarioRepository.saveAll(usuarios);
+        planoRepository.delete(plano);
     }
 
-    private PlanoResponseDTO toDto(PlanoEntity p) {
+    private UsuarioEntity buscarUsuario(Authentication auth) {
+        return usuarioRepository.findByEmailIgnoreCase(auth.getName())
+                .orElseThrow(() -> new NotFoundException("Usuário não encontrado."));
+    }
+
+    private PlanoResponseDTO toResumo(PlanoEntity plano) {
         return new PlanoResponseDTO(
-                p.getId(),
-                p.getNomeProjeto(),
-                p.getStatus()
+                plano.getId(),
+                plano.getNomeProjeto(),
+                plano.getVersao(),
+                plano.getStatus(),
+                plano.getCriadoEm()
+        );
+    }
+
+    private PlanoDetalhadoResponseDTO toDetalhado(PlanoEntity plano) {
+        return new PlanoDetalhadoResponseDTO(
+                plano.getId(),
+                plano.getNomeProjeto(),
+                plano.getVersao(),
+                plano.getObjetivo(),
+                plano.getVisaoGeral(),
+                plano.getStatus(),
+                plano.getCriadoEm()
         );
     }
 }

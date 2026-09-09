@@ -10,6 +10,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 @Component
@@ -22,32 +23,32 @@ public class TokenProvider {
     @Value("${jwt.key}")
     private String key;
 
-    public String gerarToken(Authentication authentication) {
-        UserDetails user = (UserDetails) authentication.getPrincipal();
-        return buildToken(user.getUsername());
+    public String gerarToken(Authentication auth) {
+        UserDetails usuario = (UserDetails) auth.getPrincipal();
+        return criarToken(usuario.getUsername());
     }
 
-    private String buildToken(String username) {
-        Date now = new Date();
-        Date expiration = new Date(now.getTime() + expirationTime);
+    private String criarToken(String email) {
+        Date agora = new Date();
+        Date expiracao = new Date(agora.getTime() + expirationTime);
 
         return Jwts.builder()
-                .subject(username)
-                .issuedAt(now)
-                .expiration(expiration)
+                .subject(email)
+                .issuedAt(agora)
+                .expiration(expiracao)
                 .signWith(getSigningKey())
                 .compact();
     }
 
     private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(key.getBytes());
+        return Keys.hmacShaKeyFor(key.getBytes(StandardCharsets.UTF_8));
     }
 
     public boolean isTokenValid(String token) {
         try {
             getClaims(token);
             return true;
-        } catch (Exception e) {
+        } catch (Exception ex) {
             return false;
         }
     }

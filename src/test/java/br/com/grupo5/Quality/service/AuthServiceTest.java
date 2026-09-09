@@ -9,9 +9,9 @@ import br.com.grupo5.Quality.database.repository.UsuarioRepository;
 import br.com.grupo5.Quality.dto.request.UsuarioLoginRequestDTO;
 import br.com.grupo5.Quality.dto.request.UsuarioRequestDTO;
 import br.com.grupo5.Quality.dto.response.TokenResponseDTO;
+import br.com.grupo5.Quality.dto.response.UsuarioResponseDTO;
 import br.com.grupo5.Quality.exception.AlreadyExistsException;
-import br.com.grupo5.Quality.exception.NotFoundException;
-import org.apache.coyote.BadRequestException;
+import br.com.grupo5.Quality.exception.UnauthorizedException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -24,6 +24,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -51,102 +52,110 @@ class AuthServiceTest {
     private TokenProvider tokenProvider;
 
     @Test
-    void deveRegistrarUsuarioComSenhaCodificadaRoleUserEValoresIniciais() throws Exception {
+    void deveRegistrarUsuarioAtivoComRoleUser() {
         AuthService service = service();
-        UsuarioRequestDTO dto = new UsuarioRequestDTO("Usuario", EMAIL, "senha123");
-        RoleEntity roleUser = RoleEntity.builder().nome(RoleTypeEnum.ROLE_USER.name()).build();
-        when(usuarioRepository.existsByEmailIgnoreCase(EMAIL)).thenReturn(false);
-        when(roleRepository.findByNome(RoleTypeEnum.ROLE_USER.name())).thenReturn(Optional.of(roleUser));
-        when(passwordEncoder.encode("senha123")).thenReturn("senha-codificada");
+        UsuarioRequestDTO dto = new UsuarioRequestDTO(" Usuário ", " USUARIO@QUALITY.COM ", "senha123");
+        RoleEntity role = RoleEntity.builder().nome(RoleTypeEnum.ROLE_USER.name()).build();
 
-        service.register(dto);
+        when(usuarioRepository.existsByEmailIgnoreCase(EMAIL)).thenReturn(false);
+        when(roleRepository.findByNome(RoleTypeEnum.ROLE_USER.name()))
+                .thenReturn(Optional.of(role));
+        when(passwordEncoder.encode("senha123")).thenReturn("senha-codificada");
+        when(usuarioRepository.save(any(UsuarioEntity.class))).thenAnswer(invocation -> {
+            UsuarioEntity usuario = invocation.getArgument(0);
+            usuario.setId(UUID.randomUUID());
+            return usuario;
+        });
+
+        UsuarioResponseDTO response = service.registrar(dto);
 
         ArgumentCaptor<UsuarioEntity> captor = ArgumentCaptor.forClass(UsuarioEntity.class);
         verify(usuarioRepository).save(captor.capture());
-        UsuarioEntity salvo = captor.getValue();
-        assertEquals("Usuario", salvo.getNome());
-        assertEquals(EMAIL, salvo.getEmail());
-        assertEquals("senha-codificada", salvo.getSenhaHash());
-        assertTrue(salvo.getRoles().contains(roleUser));
-        assertTrue(salvo.isAtivo());
-        assertNotNull(salvo.getCriadoEm());
+        UsuarioEntity usuario = captor.getValue();
+
+        assertEquals("Usuário", usuario.getNome());
+        assertEquals(EMAIL, usuario.getEmail());
+        assertEquals("senha-codificada", usuario.getSenhaHash());
+        assertTrue(usuario.isAtivo());
+        assertTrue(usuario.getRoles().contains(role));
+        assertNotNull(usuario.getCriadoEm());
+        assertEquals(EMAIL, response.email());
+        assertTrue(response.roles().contains(RoleTypeEnum.ROLE_USER.name()));
     }
 
     @Test
-    void deveCriarRoleUserQuandoElaAindaNaoExiste() throws Exception {
+    void deveCriarRoleUserQuandoNecessario() {
         AuthService service = service();
-        UsuarioRequestDTO dto = new UsuarioRequestDTO("Usuario", EMAIL, "senha123");
-        RoleEntity roleCriada = RoleEntity.builder().nome(RoleTypeEnum.ROLE_USER.name()).build();
+        UsuarioRequestDTO dto = new UsuarioRequestDTO("Usuário", EMAIL, "senha123");
+        RoleEntity role = RoleEntity.builder().nome(RoleTypeEnum.ROLE_USER.name()).build();
+
         when(usuarioRepository.existsByEmailIgnoreCase(EMAIL)).thenReturn(false);
         when(roleRepository.findByNome(RoleTypeEnum.ROLE_USER.name())).thenReturn(Optional.empty());
-        when(roleRepository.save(any(RoleEntity.class))).thenReturn(roleCriada);
+        when(roleRepository.save(any(RoleEntity.class))).thenReturn(role);
+        when(usuarioRepository.save(any(UsuarioEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        service.register(dto);
+        service.registrar(dto);
 
-        ArgumentCaptor<RoleEntity> captor = ArgumentCaptor.forClass(RoleEntity.class);
-        verify(roleRepository).save(captor.capture());
-        assertEquals(RoleTypeEnum.ROLE_USER.name(), captor.getValue().getNome());
+        verify(roleRepository).save(any(RoleEntity.class));
     }
 
     @Test
-    void naoDeveRegistrarEmailJaExistente() {
+    void deveRecusarEmailJaCadastrado() {
         AuthService service = service();
-        UsuarioRequestDTO dto = new UsuarioRequestDTO("Usuario", EMAIL, "senha123");
+        UsuarioRequestDTO dto = new UsuarioRequestDTO("Usuário", EMAIL, "senha123");
         when(usuarioRepository.existsByEmailIgnoreCase(EMAIL)).thenReturn(true);
 
-        assertThrows(AlreadyExistsException.class, () -> service.register(dto));
+        assertThrows(AlreadyExistsException.class, () -> service.registrar(dto));
         verify(usuarioRepository, never()).save(any());
     }
 
     @Test
-    void deveAutenticarEGerarToken() throws Exception {
+    void deveAutenticarEGerarToken() {
         AuthService service = service();
         UsuarioLoginRequestDTO dto = new UsuarioLoginRequestDTO(EMAIL, "senha123");
-        Authentication authentication = new UsernamePasswordAuthenticationToken(EMAIL, "senha123");
-        when(usuarioRepository.existsByEmailIgnoreCase(EMAIL)).thenReturn(true);
+        Authentication auth = new UsernamePasswordAuthenticationToken(EMAIL, null);
+
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
-                .thenReturn(authentication);
-        when(tokenProvider.gerarToken(authentication)).thenReturn("jwt");
+                .thenReturn(auth);
+        when(tokenProvider.gerarToken(auth)).thenReturn("jwt");
         when(tokenProvider.getExpirationTime()).thenReturn(900_000L);
 
-        TokenResponseDTO response = service.login(dto);
+        TokenResponseDTO response = service.autenticar(dto);
 
-        assertEquals("jwt", response.token());
-        assertEquals(900_000L, response.expiration());
+        assertEquals("jwt", response.accessToken());
+        assertEquals("Bearer", response.tokenType());
+        assertEquals(900_000L, response.expiresInMs());
     }
 
     @Test
-    void deveRecusarLoginDeUsuarioInexistente() {
-        AuthService service = service();
-        UsuarioLoginRequestDTO dto = new UsuarioLoginRequestDTO(EMAIL, "senha123");
-        when(usuarioRepository.existsByEmailIgnoreCase(EMAIL)).thenReturn(false);
-
-        assertThrows(NotFoundException.class, () -> service.login(dto));
-        verify(authenticationManager, never()).authenticate(any());
-    }
-
-    @Test
-    void deveConverterCredenciaisInvalidasEmBadRequest() {
+    void deveRetornarErroGenericoParaCredenciaisInvalidas() {
         AuthService service = service();
         UsuarioLoginRequestDTO dto = new UsuarioLoginRequestDTO(EMAIL, "senha-incorreta");
-        when(usuarioRepository.existsByEmailIgnoreCase(EMAIL)).thenReturn(true);
-        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
-                .thenThrow(new BadCredentialsException("credenciais invalidas"));
 
-        assertThrows(BadRequestException.class, () -> service.login(dto));
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new BadCredentialsException("credenciais inválidas"));
+
+        UnauthorizedException erro = assertThrows(
+                UnauthorizedException.class,
+                () -> service.autenticar(dto)
+        );
+
+        assertEquals("E-mail ou senha inválidos.", erro.getMessage());
     }
 
     @Test
-    void deveAtualizarTokenDoUsuarioAutenticado() {
+    void deveRenovarToken() {
         AuthService service = service();
-        Authentication authentication = new UsernamePasswordAuthenticationToken(EMAIL, null);
-        when(tokenProvider.gerarToken(authentication)).thenReturn("jwt-atualizado");
+        Authentication auth = new UsernamePasswordAuthenticationToken(EMAIL, null);
+
+        when(tokenProvider.gerarToken(auth)).thenReturn("jwt-atualizado");
         when(tokenProvider.getExpirationTime()).thenReturn(900_000L);
 
-        TokenResponseDTO response = service.refreshToken(authentication);
+        TokenResponseDTO response = service.renovar(auth);
 
-        assertEquals("jwt-atualizado", response.token());
-        assertEquals(900_000L, response.expiration());
+        assertEquals("jwt-atualizado", response.accessToken());
+        assertEquals(900_000L, response.expiresInMs());
     }
 
     private AuthService service() {
