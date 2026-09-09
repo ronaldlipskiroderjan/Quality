@@ -2,85 +2,134 @@ package br.com.grupo5.Quality.service;
 
 import br.com.grupo5.Quality.database.UsuarioEntity;
 import br.com.grupo5.Quality.database.repository.UsuarioRepository;
-import br.com.grupo5.Quality.dto.response.UsuarioAdminResponseDTO;
 import br.com.grupo5.Quality.dto.request.PasswordRequestDTO;
 import br.com.grupo5.Quality.dto.request.UsuarioUpdateRequestDTO;
 import br.com.grupo5.Quality.dto.response.ImagemResponseDTO;
+import br.com.grupo5.Quality.dto.response.UsuarioAdminResponseDTO;
 import br.com.grupo5.Quality.dto.response.UsuarioResponseDTO;
+import br.com.grupo5.Quality.exception.AlreadyExistsException;
+import br.com.grupo5.Quality.exception.InvalidRequestException;
 import br.com.grupo5.Quality.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.apache.coyote.BadRequestException;
-import org.hibernate.validator.internal.constraintvalidators.bv.time.pastorpresent.PastOrPresentValidatorForCalendar;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.Objects;
+import java.io.IOException;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
-    private final PastOrPresentValidatorForCalendar pastOrPresentValidatorForCalendar;
     private final PasswordEncoder passwordEncoder;
 
-    public void saveImagem(Authentication authentication, MultipartFile imagem) throws Exception{
-        UsuarioEntity usuario = usuarioRepository.findByEmailIgnoreCase(authentication.getName())
-                .orElseThrow(() -> new NotFoundException("Usuário não econtrado..."));
-        usuario.setFotoPerfil(imagem.getBytes());
-        usuario.setContentType(imagem.getContentType());
+    @Transactional
+    public void salvarImagem(Authentication auth, MultipartFile imagem) {
+        validarImagem(imagem);
+        UsuarioEntity usuario = buscarUsuario(auth);
+        usuario.setFotoPerfil(lerImagem(imagem));
+        usuario.setTipoImagem(imagem.getContentType());
         usuarioRepository.save(usuario);
     }
 
-    public ImagemResponseDTO findImagem(Authentication authentication) throws Exception {
-        return usuarioRepository.findByEmailIgnoreCase(authentication.getName())
-                .map(u -> new ImagemResponseDTO(
-                        u.getContentType(),
-                        u.getFotoPerfil()
-                ))
-                .orElseThrow(() -> new NotFoundException("Usuário não econtrado..."));
+    @Transactional(readOnly = true)
+    public ImagemResponseDTO buscarImagem(Authentication auth) {
+        UsuarioEntity usuario = buscarUsuario(auth);
+        if (usuario.getFotoPerfil() == null) {
+            throw new NotFoundException("Imagem de perfil não encontrada.");
+        }
+        return new ImagemResponseDTO(usuario.getTipoImagem(), usuario.getFotoPerfil());
     }
 
-    public UsuarioResponseDTO findMe(Authentication authentication) throws Exception {
-        return usuarioRepository.findByEmailIgnoreCase(authentication.getName())
-                .map(u -> new UsuarioResponseDTO(
-                        u.getNome(),
-                        u.getEmail()
-                ))
-                .orElseThrow(() -> new NotFoundException("Usuário não encontrado..."));
+    @Transactional(readOnly = true)
+    public UsuarioResponseDTO buscarPerfil(Authentication auth) {
+        return toResponse(buscarUsuario(auth));
     }
 
-    public Page<UsuarioAdminResponseDTO> findAll(Pageable pageable) {
+    @Transactional(readOnly = true)
+    public Page<UsuarioAdminResponseDTO> listar(Pageable pageable) {
         return usuarioRepository.findAll(pageable)
-                .map(u -> new UsuarioAdminResponseDTO(
-                        u.getId(),
-                        u.getNome(),
-                        u.getEmail(),
-                        u.isAtivo(),
-                        u.getCriadoEm()
+                .map(usuario -> new UsuarioAdminResponseDTO(
+                        usuario.getId(),
+                        usuario.getNome(),
+                        usuario.getEmail(),
+                        usuario.isAtivo(),
+                        usuario.getCriadoEm()
                 ));
     }
 
-    public void updatePassword(Authentication authentication, PasswordRequestDTO dto) throws Exception {
-        UsuarioEntity usuario = usuarioRepository.findByEmailIgnoreCase(authentication.getName())
-                .orElseThrow(() -> new NotFoundException("Usuário não econtrado..."));
-        if (passwordEncoder.matches(dto.senhaAntiga(), usuario.getSenhaHash())) {
-            usuario.setSenhaHash(passwordEncoder.encode(dto.novaSenha()));
-        } else {
-            throw new BadRequestException("As Senhas não correspondem...");
+    @Transactional
+    public void alterarSenha(Authentication auth, PasswordRequestDTO dto) {
+        UsuarioEntity usuario = buscarUsuario(auth);
+
+        if (!dto.novaSenha().equals(dto.confirmacaoSenha())) {
+            throw new InvalidRequestException("A confirmação da senha não corresponde.");
         }
+        if (!passwordEncoder.matches(dto.senhaAntiga(), usuario.getSenhaHash())) {
+            throw new InvalidRequestException("A senha atual está incorreta.");
+        }
+
+        usuario.setSenhaHash(passwordEncoder.encode(dto.novaSenha()));
         usuarioRepository.save(usuario);
     }
 
-    public void updateMe(Authentication authentication, UsuarioUpdateRequestDTO dto) throws Exception {
-        UsuarioEntity usuario = usuarioRepository.findByEmailIgnoreCase(authentication.getName())
-                .orElseThrow(() -> new NotFoundException("Usuário não econtrado..."));
-        usuario.setNome(dto.nome());
-        usuario.setEmail(dto.email());
-        usuarioRepository.save(usuario);
+    @Transactional
+    public UsuarioResponseDTO atualizarPerfil(
+            Authentication auth,
+            UsuarioUpdateRequestDTO dto
+    ) {
+        UsuarioEntity usuario = buscarUsuario(auth);
+        String email = dto.email().trim().toLowerCase(Locale.ROOT);
+
+        if (!usuario.getEmail().equalsIgnoreCase(email)
+                && usuarioRepository.existsByEmailIgnoreCase(email)) {
+            throw new AlreadyExistsException("E-mail já cadastrado.");
+        }
+
+        usuario.setNome(dto.nome().trim());
+        usuario.setEmail(email);
+        return toResponse(usuarioRepository.save(usuario));
+    }
+
+    private UsuarioEntity buscarUsuario(Authentication auth) {
+        return usuarioRepository.findByEmailIgnoreCase(auth.getName())
+                .orElseThrow(() -> new NotFoundException("Usuário não encontrado."));
+    }
+
+    private void validarImagem(MultipartFile imagem) {
+        String tipo = imagem.getContentType();
+        if (imagem.isEmpty() || tipo == null || !tipo.startsWith("image/")) {
+            throw new InvalidRequestException("Envie um arquivo de imagem válido.");
+        }
+    }
+
+    private byte[] lerImagem(MultipartFile imagem) {
+        try {
+            return imagem.getBytes();
+        } catch (IOException ex) {
+            throw new InvalidRequestException("Não foi possível ler a imagem.");
+        }
+    }
+
+    private UsuarioResponseDTO toResponse(UsuarioEntity usuario) {
+        Set<String> roles = usuario.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.toUnmodifiableSet());
+
+        return new UsuarioResponseDTO(
+                usuario.getId(),
+                usuario.getNome(),
+                usuario.getEmail(),
+                roles
+        );
     }
 }

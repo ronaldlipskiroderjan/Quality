@@ -1,6 +1,5 @@
 package br.com.grupo5.Quality.database.repository;
 
-import br.com.grupo5.Quality.database.ArtefatoEntity;
 import br.com.grupo5.Quality.database.PlanoEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 

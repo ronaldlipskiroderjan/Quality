@@ -1,16 +1,35 @@
 package br.com.grupo5.Quality.database;
 
-import jakarta.persistence.*;
-import lombok.*;
-import org.jspecify.annotations.Nullable;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 
 @Entity
-@Table(name = "Usuarios")
+@Table(name = "usuarios")
 @Getter
 @Setter
 @Builder
@@ -22,10 +41,10 @@ public class UsuarioEntity implements UserDetails {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 100)
     private String nome;
 
-    @Column(unique = true, nullable = false)
+    @Column(unique = true, nullable = false, length = 254)
     private String email;
 
     @Column(name = "senha_hash", nullable = false)
@@ -37,35 +56,37 @@ public class UsuarioEntity implements UserDetails {
     @Column(name = "criado_em", nullable = false)
     private LocalDateTime criadoEm;
 
-    private String contentType;
+    @Column(name = "tipo_imagem")
+    private String tipoImagem;
 
     @Lob
-    @Column(columnDefinition = "BYTEA", insertable = false)
+    @Column(name = "foto_perfil", columnDefinition = "BYTEA")
     private byte[] fotoPerfil;
 
+    @Builder.Default
     @OneToMany(mappedBy = "auditor", fetch = FetchType.LAZY)
-    private Set<ArtefatoEntity> artefatos;
+    private Set<ArtefatoEntity> artefatos = new HashSet<>();
 
+    @Builder.Default
     @OneToMany(mappedBy = "responsavel", fetch = FetchType.LAZY)
-    private Set<ItemChecklistEntity> naoConformidades;
+    private Set<ItemChecklistEntity> naoConformidades = new HashSet<>();
 
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-            name = "usuario_planos",
-            joinColumns = @JoinColumn(name = "usuario_id"),
-            inverseJoinColumns = @JoinColumn(name = "plano_id")
+    @Builder.Default
+    @OneToMany(
+            mappedBy = "usuario",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
     )
-    private Set<PlanoEntity> planos = new HashSet<>();
+    private Set<ParticipacaoPlanoEntity> participacoes = new HashSet<>();
 
+    @Builder.Default
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "usuario_roles",
-            joinColumns =  @JoinColumn(name = "usuario_id"),
+            joinColumns = @JoinColumn(name = "usuario_id"),
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
     private Set<RoleEntity> roles = new HashSet<>();
-
-    // ===========================================================
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
@@ -73,7 +94,7 @@ public class UsuarioEntity implements UserDetails {
     }
 
     @Override
-    public @Nullable String getPassword() {
+    public String getPassword() {
         return senhaHash;
     }
 
@@ -83,33 +104,23 @@ public class UsuarioEntity implements UserDetails {
     }
 
     @Override
-    public boolean isAccountNonExpired() {
-        return UserDetails.super.isAccountNonExpired();
-    }
-
-    @Override
-    public boolean isAccountNonLocked() {
-        return UserDetails.super.isAccountNonLocked();
-    }
-
-    @Override
-    public boolean isCredentialsNonExpired() {
-        return UserDetails.super.isCredentialsNonExpired();
-    }
-
-    @Override
     public boolean isEnabled() {
-        return UserDetails.super.isEnabled();
+        return ativo;
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof UsuarioEntity that)) return false;
-        return Objects.equals(id, that.id);
+    public boolean equals(Object objeto) {
+        if (this == objeto) {
+            return true;
+        }
+        if (!(objeto instanceof UsuarioEntity usuario)) {
+            return false;
+        }
+        return id != null && Objects.equals(id, usuario.id);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(id);
+        return getClass().hashCode();
     }
 }

@@ -1,0 +1,20 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:quality;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: create-drop
+
+jwt:
+  expiration: 900000
+  key: chave-de-testes-com-tamanho-minimo-de-32-bytes
+
+app:
+  admin:
+    nome: Administrador
+    email: admin@quality.test
+    password: senha-admin-teste

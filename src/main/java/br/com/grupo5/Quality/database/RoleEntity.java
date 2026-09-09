@@ -2,7 +2,6 @@ package br.com.grupo5.Quality.database;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.jspecify.annotations.Nullable;
 import org.springframework.security.core.GrantedAuthority;
 
 import java.util.UUID;
@@ -23,7 +22,7 @@ public class RoleEntity implements GrantedAuthority {
     private String nome;
 
     @Override
-    public @Nullable String getAuthority () {
+    public String getAuthority() {
         return nome;
     }
 }

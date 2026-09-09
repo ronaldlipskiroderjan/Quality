@@ -7,9 +7,9 @@ import br.com.grupo5.Quality.dto.request.UsuarioUpdateRequestDTO;
 import br.com.grupo5.Quality.dto.response.ImagemResponseDTO;
 import br.com.grupo5.Quality.dto.response.UsuarioAdminResponseDTO;
 import br.com.grupo5.Quality.dto.response.UsuarioResponseDTO;
+import br.com.grupo5.Quality.exception.AlreadyExistsException;
+import br.com.grupo5.Quality.exception.InvalidRequestException;
 import br.com.grupo5.Quality.exception.NotFoundException;
-import org.apache.coyote.BadRequestException;
-import org.hibernate.validator.internal.constraintvalidators.bv.time.pastorpresent.PastOrPresentValidatorForCalendar;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -42,150 +42,193 @@ class UsuarioServiceTest {
     @Mock
     private UsuarioRepository usuarioRepository;
     @Mock
-    private PastOrPresentValidatorForCalendar pastOrPresentValidatorForCalendar;
-    @Mock
     private PasswordEncoder passwordEncoder;
     @Mock
-    private Authentication authentication;
+    private Authentication auth;
     @Mock
-    private MultipartFile multipartFile;
+    private MultipartFile imagem;
 
     @Test
-    void deveSalvarImagemDePerfil() throws Exception {
-        UsuarioService service = service();
+    void deveSalvarImagemValida() throws Exception {
         UsuarioEntity usuario = usuario();
         byte[] conteudo = {1, 2, 3};
-        when(authentication.getName()).thenReturn(EMAIL);
-        when(usuarioRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(usuario));
-        when(multipartFile.getBytes()).thenReturn(conteudo);
-        when(multipartFile.getContentType()).thenReturn("image/png");
 
-        service.saveImagem(authentication, multipartFile);
+        prepararUsuario(usuario);
+        when(imagem.isEmpty()).thenReturn(false);
+        when(imagem.getContentType()).thenReturn("image/png");
+        when(imagem.getBytes()).thenReturn(conteudo);
+
+        service().salvarImagem(auth, imagem);
 
         assertArrayEquals(conteudo, usuario.getFotoPerfil());
-        assertEquals("image/png", usuario.getContentType());
+        assertEquals("image/png", usuario.getTipoImagem());
         verify(usuarioRepository).save(usuario);
     }
 
     @Test
-    void deveRetornarImagemDePerfil() throws Exception {
-        UsuarioService service = service();
+    void deveRecusarArquivoQueNaoSejaImagem() {
+        when(imagem.isEmpty()).thenReturn(false);
+        when(imagem.getContentType()).thenReturn("application/pdf");
+
+        assertThrows(
+                InvalidRequestException.class,
+                () -> service().salvarImagem(auth, imagem)
+        );
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void deveRetornarImagemDePerfil() {
         UsuarioEntity usuario = usuario();
-        usuario.setContentType("image/png");
+        usuario.setTipoImagem("image/png");
         usuario.setFotoPerfil(new byte[]{1, 2, 3});
-        when(authentication.getName()).thenReturn(EMAIL);
-        when(usuarioRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(usuario));
+        prepararUsuario(usuario);
 
-        ImagemResponseDTO resultado = service.findImagem(authentication);
+        ImagemResponseDTO response = service().buscarImagem(auth);
 
-        assertEquals("image/png", resultado.contentType());
-        assertArrayEquals(new byte[]{1, 2, 3}, resultado.imagem());
+        assertEquals("image/png", response.contentType());
+        assertArrayEquals(new byte[]{1, 2, 3}, response.imagem());
     }
 
     @Test
-    void deveRetornarDadosDoUsuarioAutenticado() throws Exception {
-        UsuarioService service = service();
+    void deveInformarImagemAusente() {
+        prepararUsuario(usuario());
+
+        assertThrows(NotFoundException.class, () -> service().buscarImagem(auth));
+    }
+
+    @Test
+    void deveRetornarPerfilDoUsuario() {
         UsuarioEntity usuario = usuario();
-        when(authentication.getName()).thenReturn(EMAIL);
-        when(usuarioRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(usuario));
+        prepararUsuario(usuario);
 
-        UsuarioResponseDTO resultado = service.findMe(authentication);
+        UsuarioResponseDTO response = service().buscarPerfil(auth);
 
-        assertEquals(new UsuarioResponseDTO("Usuario", EMAIL), resultado);
+        assertEquals(usuario.getId(), response.id());
+        assertEquals("Usuário", response.nome());
+        assertEquals(EMAIL, response.email());
     }
 
     @Test
-    void deveListarUsuariosPaginadosParaAdministracao() {
-        UsuarioService service = service();
-        var pageable = PageRequest.of(0, 15);
+    void deveListarUsuariosParaAdministracao() {
+        PageRequest pageable = PageRequest.of(0, 15);
         UsuarioEntity usuario = usuario();
         Page<UsuarioEntity> pagina = new PageImpl<>(List.of(usuario), pageable, 1);
         when(usuarioRepository.findAll(pageable)).thenReturn(pagina);
 
-        Page<UsuarioAdminResponseDTO> resultado = service.findAll(pageable);
+        Page<UsuarioAdminResponseDTO> response = service().listar(pageable);
 
-        assertEquals(1, resultado.getTotalElements());
-        assertEquals(usuario.getId(), resultado.getContent().getFirst().id());
-        assertEquals("Usuario", resultado.getContent().getFirst().nome());
-        assertEquals(EMAIL, resultado.getContent().getFirst().email());
+        assertEquals(1, response.getTotalElements());
+        assertEquals(usuario.getId(), response.getContent().getFirst().id());
     }
 
     @Test
-    void deveAtualizarSenhaQuandoSenhaAntigaConfereEConfirmacaoEValida() throws Exception {
-        UsuarioService service = service();
+    void deveAlterarSenhaValida() {
         UsuarioEntity usuario = usuario();
         usuario.setSenhaHash("hash-antigo");
-        PasswordRequestDTO dto = new PasswordRequestDTO("senha-antiga", "senha-nova", "senha-nova");
-        when(authentication.getName()).thenReturn(EMAIL);
-        when(usuarioRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(usuario));
+        PasswordRequestDTO dto = new PasswordRequestDTO(
+                "senha-antiga",
+                "senha-nova",
+                "senha-nova"
+        );
+
+        prepararUsuario(usuario);
         when(passwordEncoder.matches("senha-antiga", "hash-antigo")).thenReturn(true);
         when(passwordEncoder.encode("senha-nova")).thenReturn("hash-novo");
 
-        service.updatePassword(authentication, dto);
+        service().alterarSenha(auth, dto);
 
         assertEquals("hash-novo", usuario.getSenhaHash());
         verify(usuarioRepository).save(usuario);
     }
 
     @Test
-    void deveRecusarSenhaAntigaIncorreta() {
-        UsuarioService service = service();
+    void deveRecusarSenhaAtualIncorreta() {
         UsuarioEntity usuario = usuario();
         usuario.setSenhaHash("hash-antigo");
-        PasswordRequestDTO dto = new PasswordRequestDTO("senha-incorreta", "senha-nova", "senha-nova");
-        when(authentication.getName()).thenReturn(EMAIL);
-        when(usuarioRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(usuario));
+        PasswordRequestDTO dto = new PasswordRequestDTO(
+                "senha-incorreta",
+                "senha-nova",
+                "senha-nova"
+        );
 
-        assertThrows(BadRequestException.class, () -> service.updatePassword(authentication, dto));
+        prepararUsuario(usuario);
+        when(passwordEncoder.matches("senha-incorreta", "hash-antigo")).thenReturn(false);
+
+        assertThrows(
+                InvalidRequestException.class,
+                () -> service().alterarSenha(auth, dto)
+        );
         verify(usuarioRepository, never()).save(any());
     }
 
     @Test
-    void deveRecusarConfirmacaoDeSenhaDiferente() {
-        UsuarioService service = service();
+    void deveRecusarConfirmacaoDiferente() {
         UsuarioEntity usuario = usuario();
-        usuario.setSenhaHash("hash-antigo");
-        PasswordRequestDTO dto = new PasswordRequestDTO("senha-antiga", "senha-nova", "outra-senha");
-        when(authentication.getName()).thenReturn(EMAIL);
-        when(usuarioRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(usuario));
-        when(passwordEncoder.matches("senha-antiga", "hash-antigo")).thenReturn(true);
+        PasswordRequestDTO dto = new PasswordRequestDTO(
+                "senha-antiga",
+                "senha-nova",
+                "outra-senha"
+        );
+        prepararUsuario(usuario);
 
-        assertThrows(BadRequestException.class, () -> service.updatePassword(authentication, dto));
+        assertThrows(
+                InvalidRequestException.class,
+                () -> service().alterarSenha(auth, dto)
+        );
         verify(usuarioRepository, never()).save(any());
     }
 
     @Test
-    void deveAtualizarNomeEEmailDoUsuario() throws Exception {
-        UsuarioService service = service();
+    void deveAtualizarNomeEEmailNormalizado() {
         UsuarioEntity usuario = usuario();
-        UsuarioUpdateRequestDTO dto = new UsuarioUpdateRequestDTO("Novo nome", "novo@quality.com");
-        when(authentication.getName()).thenReturn(EMAIL);
-        when(usuarioRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(usuario));
+        prepararUsuario(usuario);
+        UsuarioUpdateRequestDTO dto = new UsuarioUpdateRequestDTO(
+                " Novo nome ",
+                " NOVO@QUALITY.COM "
+        );
+        when(usuarioRepository.existsByEmailIgnoreCase("novo@quality.com"))
+                .thenReturn(false);
+        when(usuarioRepository.save(usuario)).thenReturn(usuario);
 
-        service.updateMe(authentication, dto);
+        UsuarioResponseDTO response = service().atualizarPerfil(auth, dto);
 
         assertEquals("Novo nome", usuario.getNome());
-        assertEquals("novo@quality.com", usuario.getEmail());
-        verify(usuarioRepository).save(usuario);
+        assertEquals("novo@quality.com", response.email());
     }
 
     @Test
-    void deveInformarQuandoUsuarioAutenticadoNaoExiste() {
-        UsuarioService service = service();
-        when(authentication.getName()).thenReturn(EMAIL);
-        when(usuarioRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.empty());
+    void deveRecusarEmailEmUsoPorOutroUsuario() {
+        UsuarioEntity usuario = usuario();
+        prepararUsuario(usuario);
+        UsuarioUpdateRequestDTO dto = new UsuarioUpdateRequestDTO(
+                "Usuário",
+                "outro@quality.com"
+        );
+        when(usuarioRepository.existsByEmailIgnoreCase("outro@quality.com"))
+                .thenReturn(true);
 
-        assertThrows(NotFoundException.class, () -> service.findMe(authentication));
+        assertThrows(
+                AlreadyExistsException.class,
+                () -> service().atualizarPerfil(auth, dto)
+        );
+        verify(usuarioRepository, never()).save(any());
     }
 
     private UsuarioService service() {
-        return new UsuarioService(usuarioRepository, pastOrPresentValidatorForCalendar, passwordEncoder);
+        return new UsuarioService(usuarioRepository, passwordEncoder);
+    }
+
+    private void prepararUsuario(UsuarioEntity usuario) {
+        when(auth.getName()).thenReturn(EMAIL);
+        when(usuarioRepository.findByEmailIgnoreCase(EMAIL))
+                .thenReturn(Optional.of(usuario));
     }
 
     private UsuarioEntity usuario() {
         return UsuarioEntity.builder()
                 .id(UUID.randomUUID())
-                .nome("Usuario")
+                .nome("Usuário")
                 .email(EMAIL)
                 .ativo(true)
                 .criadoEm(LocalDateTime.now())
