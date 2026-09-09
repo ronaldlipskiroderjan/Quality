@@ -1,8 +1,12 @@
 package br.com.grupo5.Quality.service;
 
+import br.com.grupo5.Quality.database.ParticipacaoPlanoEntity;
 import br.com.grupo5.Quality.database.PlanoEntity;
 import br.com.grupo5.Quality.database.UsuarioEntity;
+import br.com.grupo5.Quality.database.enums.PapelPlano;
+import br.com.grupo5.Quality.database.enums.PermissaoPlano;
 import br.com.grupo5.Quality.database.enums.Status;
+import br.com.grupo5.Quality.database.repository.ParticipacaoPlanoRepository;
 import br.com.grupo5.Quality.database.repository.PlanoRepository;
 import br.com.grupo5.Quality.database.repository.UsuarioRepository;
 import br.com.grupo5.Quality.dto.request.PlanoRequestDTO;
@@ -15,7 +19,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -24,6 +30,7 @@ public class PlanoService {
 
     private final PlanoRepository planoRepository;
     private final UsuarioRepository usuarioRepository;
+    private final ParticipacaoPlanoRepository participacaoRepository;
     private final AcessoPlanoService acessoPlanoService;
 
     @Transactional
@@ -40,22 +47,28 @@ public class PlanoService {
                 .build();
 
         plano = planoRepository.save(plano);
-        usuario.getPlanos().add(plano);
-        usuarioRepository.save(usuario);
+        ParticipacaoPlanoEntity participacao = criarProprietario(plano, usuario);
+        participacaoRepository.save(participacao);
+        plano.getParticipacoes().add(participacao);
+        usuario.getParticipacoes().add(participacao);
 
-        return toDetalhado(plano);
+        return toDetalhado(participacao);
     }
 
     @Transactional(readOnly = true)
     public List<PlanoResponseDTO> listar(Authentication auth) {
-        return planoRepository.findAllByUsuarioEmail(auth.getName()).stream()
+        return participacaoRepository
+                .findAllByUsuarioEmailIgnoreCaseOrderByPlanoCriadoEmDesc(
+                        auth.getName()
+                )
+                .stream()
                 .map(this::toResumo)
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public PlanoDetalhadoResponseDTO buscar(Authentication auth, UUID id) {
-        return toDetalhado(acessoPlanoService.buscar(auth, id));
+        return toDetalhado(acessoPlanoService.buscarParticipacao(auth, id));
     }
 
     @Transactional
@@ -64,29 +77,39 @@ public class PlanoService {
             UUID id,
             PlanoRequestDTO dto
     ) {
-        PlanoEntity plano = acessoPlanoService.buscar(auth, id);
+        ParticipacaoPlanoEntity participacao = acessoPlanoService.buscarParticipacao(
+                auth,
+                id,
+                PermissaoPlano.EDITAR
+        );
+        PlanoEntity plano = participacao.getPlano();
         plano.setNomeProjeto(dto.nomeProjeto().trim());
         plano.setVersao(dto.versao().trim());
         plano.setObjetivo(dto.objetivo().trim());
         plano.setVisaoGeral(dto.visaoGeral().trim());
 
-        return toDetalhado(planoRepository.save(plano));
+        planoRepository.save(plano);
+        return toDetalhado(participacao);
     }
 
     @Transactional
     public void concluir(Authentication auth, UUID id) {
-        PlanoEntity plano = acessoPlanoService.buscar(auth, id);
+        PlanoEntity plano = acessoPlanoService.buscarPlano(
+                auth,
+                id,
+                PermissaoPlano.CONCLUIR
+        );
         plano.setStatus(Status.CONCLUIDO);
         planoRepository.save(plano);
     }
 
     @Transactional
     public void excluir(Authentication auth, UUID id) {
-        PlanoEntity plano = acessoPlanoService.buscar(auth, id);
-        List<UsuarioEntity> usuarios = usuarioRepository.findAllByPlanosId(id);
-
-        usuarios.forEach(usuario -> usuario.getPlanos().remove(plano));
-        usuarioRepository.saveAll(usuarios);
+        PlanoEntity plano = acessoPlanoService.buscarPlano(
+                auth,
+                id,
+                PermissaoPlano.EXCLUIR
+        );
         planoRepository.delete(plano);
     }
 
@@ -95,17 +118,35 @@ public class PlanoService {
                 .orElseThrow(() -> new NotFoundException("Usuário não encontrado."));
     }
 
-    private PlanoResponseDTO toResumo(PlanoEntity plano) {
+    private ParticipacaoPlanoEntity criarProprietario(
+            PlanoEntity plano,
+            UsuarioEntity usuario
+    ) {
+        return ParticipacaoPlanoEntity.builder()
+                .plano(plano)
+                .usuario(usuario)
+                .papeis(EnumSet.of(PapelPlano.PROPRIETARIO))
+                .criadoEm(LocalDateTime.now())
+                .build();
+    }
+
+    private PlanoResponseDTO toResumo(ParticipacaoPlanoEntity participacao) {
+        PlanoEntity plano = participacao.getPlano();
         return new PlanoResponseDTO(
                 plano.getId(),
                 plano.getNomeProjeto(),
                 plano.getVersao(),
                 plano.getStatus(),
-                plano.getCriadoEm()
+                plano.getCriadoEm(),
+                Set.copyOf(participacao.getPapeis()),
+                Set.copyOf(participacao.getPermissoes())
         );
     }
 
-    private PlanoDetalhadoResponseDTO toDetalhado(PlanoEntity plano) {
+    private PlanoDetalhadoResponseDTO toDetalhado(
+            ParticipacaoPlanoEntity participacao
+    ) {
+        PlanoEntity plano = participacao.getPlano();
         return new PlanoDetalhadoResponseDTO(
                 plano.getId(),
                 plano.getNomeProjeto(),
@@ -113,7 +154,9 @@ public class PlanoService {
                 plano.getObjetivo(),
                 plano.getVisaoGeral(),
                 plano.getStatus(),
-                plano.getCriadoEm()
+                plano.getCriadoEm(),
+                Set.copyOf(participacao.getPapeis()),
+                Set.copyOf(participacao.getPermissoes())
         );
     }
 }

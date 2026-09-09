@@ -1,5 +1,6 @@
 package br.com.grupo5.Quality.database;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -71,13 +72,12 @@ public class UsuarioEntity implements UserDetails {
     private Set<ItemChecklistEntity> naoConformidades = new HashSet<>();
 
     @Builder.Default
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-            name = "usuario_planos",
-            joinColumns = @JoinColumn(name = "usuario_id"),
-            inverseJoinColumns = @JoinColumn(name = "plano_id")
+    @OneToMany(
+            mappedBy = "usuario",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
     )
-    private Set<PlanoEntity> planos = new HashSet<>();
+    private Set<ParticipacaoPlanoEntity> participacoes = new HashSet<>();
 
     @Builder.Default
     @ManyToMany(fetch = FetchType.EAGER)

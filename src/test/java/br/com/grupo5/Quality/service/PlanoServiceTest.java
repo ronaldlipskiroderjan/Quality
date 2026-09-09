@@ -1,8 +1,12 @@
 package br.com.grupo5.Quality.service;
 
+import br.com.grupo5.Quality.database.ParticipacaoPlanoEntity;
 import br.com.grupo5.Quality.database.PlanoEntity;
 import br.com.grupo5.Quality.database.UsuarioEntity;
+import br.com.grupo5.Quality.database.enums.PapelPlano;
+import br.com.grupo5.Quality.database.enums.PermissaoPlano;
 import br.com.grupo5.Quality.database.enums.Status;
+import br.com.grupo5.Quality.database.repository.ParticipacaoPlanoRepository;
 import br.com.grupo5.Quality.database.repository.PlanoRepository;
 import br.com.grupo5.Quality.database.repository.UsuarioRepository;
 import br.com.grupo5.Quality.dto.request.PlanoRequestDTO;
@@ -17,14 +21,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -43,76 +45,113 @@ class PlanoServiceTest {
     @Mock
     private UsuarioRepository usuarioRepository;
     @Mock
+    private ParticipacaoPlanoRepository participacaoRepository;
+    @Mock
     private AcessoPlanoService acessoPlanoService;
     @Mock
     private Authentication auth;
 
     @Test
-    void deveCriarPlanoPendenteEVincularAoUsuario() {
+    void deveCriarPlanoComUsuarioProprietario() {
         UsuarioEntity usuario = usuario();
         when(auth.getName()).thenReturn(EMAIL);
-        when(usuarioRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(
+                Optional.of(usuario)
+        );
         when(planoRepository.save(any(PlanoEntity.class)))
                 .thenAnswer(invocation -> {
                     PlanoEntity plano = invocation.getArgument(0);
                     plano.setId(UUID.randomUUID());
                     return plano;
                 });
+        when(participacaoRepository.save(any(ParticipacaoPlanoEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         PlanoDetalhadoResponseDTO response = service().criar(auth, planoDto());
 
-        ArgumentCaptor<PlanoEntity> captor = ArgumentCaptor.forClass(PlanoEntity.class);
-        verify(planoRepository).save(captor.capture());
-        PlanoEntity plano = captor.getValue();
+        ArgumentCaptor<ParticipacaoPlanoEntity> captor =
+                ArgumentCaptor.forClass(ParticipacaoPlanoEntity.class);
+        verify(participacaoRepository).save(captor.capture());
+        ParticipacaoPlanoEntity participacao = captor.getValue();
 
-        assertEquals("Quality", plano.getNomeProjeto());
-        assertEquals(Status.PENDENTE, plano.getStatus());
-        assertNotNull(plano.getCriadoEm());
-        assertTrue(usuario.getPlanos().contains(plano));
-        assertEquals(plano.getId(), response.id());
-        verify(usuarioRepository).save(usuario);
+        assertEquals("Quality", participacao.getPlano().getNomeProjeto());
+        assertEquals(Status.PENDENTE, participacao.getPlano().getStatus());
+        assertNotNull(participacao.getPlano().getCriadoEm());
+        assertTrue(participacao.possuiPapel(PapelPlano.PROPRIETARIO));
+        assertTrue(participacao.possuiPermissao(PermissaoPlano.EXCLUIR));
+        assertTrue(usuario.getParticipacoes().contains(participacao));
+        assertEquals(participacao.getPlano().getId(), response.id());
+        assertTrue(response.meusPapeis().contains(PapelPlano.PROPRIETARIO));
     }
 
     @Test
     void naoDeveCriarPlanoSemUsuarioAutenticado() {
         when(auth.getName()).thenReturn(EMAIL);
-        when(usuarioRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.empty());
+        when(usuarioRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(
+                Optional.empty()
+        );
 
         assertThrows(NotFoundException.class, () -> service().criar(auth, planoDto()));
         verify(planoRepository, never()).save(any());
     }
 
     @Test
-    void deveListarSomentePlanosDoUsuario() {
-        PlanoEntity primeiro = plano("Projeto A", Status.PENDENTE);
-        PlanoEntity segundo = plano("Projeto B", Status.CONCLUIDO);
+    void deveListarSomentePlanosComParticipacaoDoUsuario() {
+        ParticipacaoPlanoEntity primeiro = participacao(
+                plano("Projeto A", Status.PENDENTE),
+                PapelPlano.PROPRIETARIO
+        );
+        ParticipacaoPlanoEntity segundo = participacao(
+                plano("Projeto B", Status.CONCLUIDO),
+                PapelPlano.AUDITOR
+        );
         when(auth.getName()).thenReturn(EMAIL);
-        when(planoRepository.findAllByUsuarioEmail(EMAIL))
+        when(participacaoRepository
+                .findAllByUsuarioEmailIgnoreCaseOrderByPlanoCriadoEmDesc(EMAIL))
                 .thenReturn(List.of(primeiro, segundo));
 
         List<PlanoResponseDTO> response = service().listar(auth);
 
         assertEquals(2, response.size());
-        assertEquals(primeiro.getId(), response.getFirst().id());
-        verify(planoRepository).findAllByUsuarioEmail(EMAIL);
+        assertEquals(primeiro.getPlano().getId(), response.getFirst().id());
+        assertTrue(response.get(1).meusPapeis().contains(PapelPlano.AUDITOR));
     }
 
     @Test
-    void deveBuscarPlanoComObjetivoEVisaoGeral() {
-        PlanoEntity plano = plano("Quality", Status.PENDENTE);
-        when(acessoPlanoService.buscar(auth, plano.getId())).thenReturn(plano);
+    void deveBuscarPlanoComPapeisEPermissoes() {
+        ParticipacaoPlanoEntity participacao = participacao(
+                plano("Quality", Status.PENDENTE),
+                PapelPlano.RESPONSAVEL_QUALIDADE
+        );
+        when(acessoPlanoService.buscarParticipacao(
+                auth,
+                participacao.getPlano().getId()
+        )).thenReturn(participacao);
 
-        PlanoDetalhadoResponseDTO response = service().buscar(auth, plano.getId());
+        PlanoDetalhadoResponseDTO response = service().buscar(
+                auth,
+                participacao.getPlano().getId()
+        );
 
-        assertEquals(plano.getId(), response.id());
-        assertEquals("Objetivo", response.objetivo());
-        assertEquals("Visão geral", response.visaoGeral());
+        assertEquals(participacao.getPlano().getId(), response.id());
+        assertTrue(response.meusPapeis().contains(
+                PapelPlano.RESPONSAVEL_QUALIDADE
+        ));
+        assertTrue(response.minhasPermissoes().contains(PermissaoPlano.EDITAR));
     }
 
     @Test
-    void deveAtualizarPlanoAcessivel() {
+    void deveAtualizarPlanoComPermissao() {
         PlanoEntity plano = plano("Antigo", Status.PENDENTE);
-        when(acessoPlanoService.buscar(auth, plano.getId())).thenReturn(plano);
+        ParticipacaoPlanoEntity participacao = participacao(
+                plano,
+                PapelPlano.RESPONSAVEL_QUALIDADE
+        );
+        when(acessoPlanoService.buscarParticipacao(
+                auth,
+                plano.getId(),
+                PermissaoPlano.EDITAR
+        )).thenReturn(participacao);
         when(planoRepository.save(plano)).thenReturn(plano);
 
         PlanoDetalhadoResponseDTO response = service().atualizar(
@@ -127,9 +166,13 @@ class PlanoServiceTest {
     }
 
     @Test
-    void deveConcluirPlanoAcessivel() {
+    void deveConcluirPlanoComPermissao() {
         PlanoEntity plano = plano("Quality", Status.PENDENTE);
-        when(acessoPlanoService.buscar(auth, plano.getId())).thenReturn(plano);
+        when(acessoPlanoService.buscarPlano(
+                auth,
+                plano.getId(),
+                PermissaoPlano.CONCLUIR
+        )).thenReturn(plano);
 
         service().concluir(auth, plano.getId());
 
@@ -138,22 +181,16 @@ class PlanoServiceTest {
     }
 
     @Test
-    void deveRemoverVinculosAntesDeExcluirPlano() {
+    void deveExcluirPlanoComPermissao() {
         PlanoEntity plano = plano("Quality", Status.PENDENTE);
-        UsuarioEntity primeiro = usuario();
-        UsuarioEntity segundo = usuario();
-        primeiro.getPlanos().add(plano);
-        segundo.getPlanos().add(plano);
-
-        when(acessoPlanoService.buscar(auth, plano.getId())).thenReturn(plano);
-        when(usuarioRepository.findAllByPlanosId(plano.getId()))
-                .thenReturn(List.of(primeiro, segundo));
+        when(acessoPlanoService.buscarPlano(
+                auth,
+                plano.getId(),
+                PermissaoPlano.EXCLUIR
+        )).thenReturn(plano);
 
         service().excluir(auth, plano.getId());
 
-        assertFalse(primeiro.getPlanos().contains(plano));
-        assertFalse(segundo.getPlanos().contains(plano));
-        verify(usuarioRepository).saveAll(List.of(primeiro, segundo));
         verify(planoRepository).delete(plano);
     }
 
@@ -161,6 +198,7 @@ class PlanoServiceTest {
         return new PlanoService(
                 planoRepository,
                 usuarioRepository,
+                participacaoRepository,
                 acessoPlanoService
         );
     }
@@ -190,7 +228,19 @@ class PlanoServiceTest {
         return UsuarioEntity.builder()
                 .id(UUID.randomUUID())
                 .email(EMAIL)
-                .planos(new HashSet<>())
+                .build();
+    }
+
+    private ParticipacaoPlanoEntity participacao(
+            PlanoEntity plano,
+            PapelPlano papel
+    ) {
+        return ParticipacaoPlanoEntity.builder()
+                .id(UUID.randomUUID())
+                .plano(plano)
+                .usuario(usuario())
+                .papeis(EnumSet.of(papel))
+                .criadoEm(LocalDateTime.now())
                 .build();
     }
 }

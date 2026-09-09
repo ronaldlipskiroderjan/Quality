@@ -66,7 +66,7 @@ Usuário
 
 ## 4. Perfis e responsabilidades
 
-Os papéis globais já previstos na API são `ROLE_USER` e `ROLE_ADMIN`. `ROLE_ADMIN` significa exclusivamente **administrador do sistema**: essa role não representa administrador de grupo, proprietário de plano nem responsável pela qualidade. O produto também exige papéis contextuais por plano, que ainda deverão ser implementados no back-end e mantidos separados das roles globais.
+Os papéis globais da API são `ROLE_USER` e `ROLE_ADMIN`. `ROLE_ADMIN` significa exclusivamente **administrador do sistema**: essa role não representa administrador de grupo, proprietário de plano nem responsável pela qualidade. Os papéis contextuais foram implementados por participação no plano e permanecem separados das roles globais.
 
 | Papel | Responsabilidades esperadas |
 |---|---|
@@ -134,10 +134,10 @@ O fluxo recomendado para criação é um formulário em etapas, com salvamento d
 
 ### 5.3 Colaboração no plano
 
-- O proprietário poderá convidar usuários cadastrados por e-mail e atribuir um papel no plano.
-- Convites deverão ter estados como pendente, aceito, recusado, expirado e cancelado.
+- O proprietário pode adicionar usuários já cadastrados por e-mail e atribuir um ou mais papéis no plano.
+- O fluxo atual cria a participação imediatamente. Convites deverão ser implementados depois, com estados como pendente, aceito, recusado, expirado e cancelado.
 - A remoção de participante não deverá apagar sua autoria no histórico de auditoria.
-- O back-end deverá validar participação e permissão em todas as operações do plano.
+- O back-end valida participação e permissão nas operações existentes do plano e de documentos.
 - A definição de responsáveis N1/N2 poderá apontar para participantes elegíveis do próprio plano.
 - Deve ser decidido antes da implementação se responsáveis por resolução podem ser contatos externos sem conta. Até essa decisão, o front-end deve assumir usuários cadastrados.
 
@@ -386,16 +386,52 @@ Payload de criação e atualização:
 
 | Método e rota | Comportamento |
 |---|---|
-| `POST /v1/planos` | Cria o plano, vincula o usuário autenticado e retorna `201`, `Location` e o recurso detalhado. |
-| `GET /v1/planos` | Lista somente os planos vinculados ao usuário autenticado. |
-| `GET /v1/planos/{id}` | Retorna ID, projeto, versão, objetivo, visão geral, status e criação. |
-| `PUT /v1/planos/{id}` | Atualiza os campos editáveis e retorna o recurso atualizado. |
-| `PATCH /v1/planos/{id}/conclusao` | Marca o plano como concluído e retorna `204`. |
-| `DELETE /v1/planos/{id}` | Remove vínculos e exclui o plano; retorna `204`. |
+| `POST /v1/planos` | Cria o plano, registra o usuário autenticado como `PROPRIETARIO` e retorna `201`, `Location` e o recurso detalhado. |
+| `GET /v1/planos` | Lista somente os planos em que o usuário possui participação. |
+| `GET /v1/planos/{id}` | Retorna ID, projeto, versão, objetivo, visão geral, status, criação, `meusPapeis` e `minhasPermissoes`. |
+| `PUT /v1/planos/{id}` | Atualiza os campos editáveis; exige `EDITAR`. |
+| `PATCH /v1/planos/{id}/conclusao` | Marca o plano como concluído; exige `CONCLUIR` e retorna `204`. |
+| `DELETE /v1/planos/{id}` | Exclui o plano e suas participações; exige `EXCLUIR` e retorna `204`. |
 
-Busca, atualização, conclusão e exclusão utilizam o vínculo entre usuário e plano. Um plano sem vínculo é respondido como `404`, inclusive para um administrador global.
+A ausência de participação é respondida como `404`; participação existente sem a permissão exigida recebe `403`. Isso também se aplica ao administrador global.
 
-### 8.4 Documentos
+### 8.4 Participantes e permissões contextuais
+
+Uma participação é única por usuário e plano e pode conter vários papéis:
+
+- `PROPRIETARIO`;
+- `RESPONSAVEL_QUALIDADE`;
+- `AUDITOR`;
+- `PARTICIPANTE`;
+- `RESPONSAVEL_RESOLUCAO`;
+- `RESPONSAVEL_N1`;
+- `RESPONSAVEL_N2`.
+
+| Papel | Permissões atuais |
+|---|---|
+| `PROPRIETARIO` | `VISUALIZAR`, `EDITAR`, `CONCLUIR`, `EXCLUIR`, `GERENCIAR_PARTICIPANTES` e `GERENCIAR_DOCUMENTOS`. |
+| `RESPONSAVEL_QUALIDADE` | `VISUALIZAR`, `EDITAR` e `GERENCIAR_DOCUMENTOS`. |
+| Demais papéis | `VISUALIZAR`. As permissões próprias de auditoria, resolução e escalonamento serão adicionadas com esses agregados. |
+
+| Método e rota | Comportamento |
+|---|---|
+| `POST /v1/planos/{planoId}/participantes` | Adiciona um usuário cadastrado por e-mail; exige `GERENCIAR_PARTICIPANTES` e retorna `201`. |
+| `GET /v1/planos/{planoId}/participantes` | Lista participantes, papéis e permissões; exige participação no plano. |
+| `PUT /v1/planos/{planoId}/participantes/{participanteId}` | Substitui os papéis do participante; exige `GERENCIAR_PARTICIPANTES`. |
+| `DELETE /v1/planos/{planoId}/participantes/{participanteId}` | Remove o participante; exige `GERENCIAR_PARTICIPANTES` e retorna `204`. |
+
+Payload para adicionar:
+
+```json
+{
+  "email": "usuario@exemplo.com",
+  "papeis": ["AUDITOR", "PARTICIPANTE"]
+}
+```
+
+Na atualização, o payload contém somente `papeis`. O papel `PROPRIETARIO` é criado automaticamente com o plano e não pode ser atribuído, alterado ou removido por esses endpoints. Transferência de propriedade será um fluxo separado.
+
+### 8.5 Documentos
 
 Todos os endpoints de documentos são subordinados ao plano:
 
@@ -422,7 +458,7 @@ O upload usa `multipart/form-data`:
 
 O limite configurado permanece em 10 MB. Os arquivos são armazenados em `BYTEA` no PostgreSQL nesta fase.
 
-### 8.5 Recursos modelados sem endpoints
+### 8.6 Recursos modelados sem endpoints
 
 As entidades e os repositórios abaixo existem parcialmente, mas ainda não possuem contratos HTTP nem serviços funcionais completos:
 
@@ -433,8 +469,8 @@ As entidades e os repositórios abaixo existem parcialmente, mas ainda não poss
 
 Ainda não existem implementações para:
 
-- participantes, convites e papéis contextuais por plano;
-- responsáveis N1/N2;
+- convites, aceites e transferência de propriedade do plano;
+- definição dos participantes que atuarão como responsáveis N1/N2 nas regras de escalonamento;
 - não conformidade como agregado com workflow próprio;
 - comentários e evidências de resolução;
 - notificações, cronômetros e tarefas agendadas;
@@ -445,22 +481,21 @@ Ainda não existem implementações para:
 
 ## 9. Situação técnica e próximos bloqueadores
 
-O primeiro incremento corrigiu rotas conflitantes, verificações invertidas de documentos, atualização de perfil/senha, respostas detalhadas de plano, tratamento HTTP de exceções, validações básicas e controle de acesso por vínculo com o plano.
+Os incrementos concluídos corrigiram rotas conflitantes, validações, atualização de perfil/senha, tratamento HTTP de exceções, documentos e controle de acesso. O relacionamento simples `usuario_planos` foi substituído por `participacoes_plano`, com múltiplos papéis e permissões contextuais explícitas.
 
-A aplicação compila e a suíte executa 35 testes sem falhas, incluindo o carregamento completo do contexto com H2 em modo de teste. PostgreSQL continua sendo o banco da aplicação.
+A aplicação compila e a suíte executa 44 testes sem falhas, incluindo o carregamento completo do contexto com H2 em modo de teste. PostgreSQL continua sendo o banco da aplicação.
 
 Os próximos pontos estruturais são:
 
-1. substituir o vínculo simples `usuario_planos` por participantes com papéis contextuais e permissões explícitas;
-2. definir quem pode editar, concluir e excluir o plano quando houver vários participantes;
+1. criar migração versionada que transforme dados existentes de `usuario_planos` em participações e deixar de usar `ddl-auto=update` fora do desenvolvimento;
+2. implementar convites, aceite e transferência segura de propriedade;
 3. redesenhar os relacionamentos entre documento, artefato, auditoria e checklist antes de publicar esses endpoints;
 4. criar enums de status específicos para plano, avaliação, checklist e NC;
-5. adicionar migrações versionadas para PostgreSQL e deixar de usar `ddl-auto=update` fora do desenvolvimento;
-6. configurar CORS para as origens reais do front-end;
-7. padronizar também as respostas `401/403` geradas diretamente pelos filtros do Spring Security;
-8. decidir a estratégia definitiva de arquivos, pois `BYTEA` é adequado ao protótipo, mas pode não atender ao volume futuro;
-9. adicionar testes de integração com PostgreSQL/Testcontainers;
-10. implementar os agregados de artefato, checklist, auditoria e não conformidade antes de iniciar IA, e-mail e scheduler.
+5. configurar CORS para as origens reais do front-end;
+6. padronizar também as respostas `401/403` geradas diretamente pelos filtros do Spring Security;
+7. decidir a estratégia definitiva de arquivos, pois `BYTEA` é adequado ao protótipo, mas pode não atender ao volume futuro;
+8. adicionar testes de integração com PostgreSQL/Testcontainers;
+9. implementar os agregados de artefato, checklist, auditoria e não conformidade antes de iniciar IA, e-mail e scheduler.
 
 ## 10. Direção esperada para o contrato alvo
 
@@ -483,7 +518,7 @@ Exemplos conceituais de recursos futuros, ainda não implementados:
 
 ```text
 GET  /v1/planos/me
-POST /v1/planos/{planoId}/participantes
+POST /v1/planos/{planoId}/convites
 GET  /v1/planos/{planoId}/documentos?classificacao=REFERENCIA
 POST /v1/planos/{planoId}/artefatos
 POST /v1/artefatos/{artefatoId}/checklists

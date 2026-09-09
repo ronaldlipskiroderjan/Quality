@@ -3,6 +3,7 @@ package br.com.grupo5.Quality.service;
 import br.com.grupo5.Quality.database.DocumentoEntity;
 import br.com.grupo5.Quality.database.PlanoEntity;
 import br.com.grupo5.Quality.database.enums.Classificacao;
+import br.com.grupo5.Quality.database.enums.PermissaoPlano;
 import br.com.grupo5.Quality.database.repository.DocumentoRepository;
 import br.com.grupo5.Quality.dto.request.DocumentoRequestDTO;
 import br.com.grupo5.Quality.dto.response.DocumentoArquivoResponseDTO;
@@ -37,7 +38,11 @@ public class DocumentoService {
             UUID planoId,
             DocumentoRequestDTO dto
     ) {
-        PlanoEntity plano = acessoPlanoService.buscar(auth, planoId);
+        PlanoEntity plano = acessoPlanoService.buscarPlano(
+                auth,
+                planoId,
+                PermissaoPlano.GERENCIAR_DOCUMENTOS
+        );
         MultipartFile arquivo = dto.arquivo();
         validarArquivo(arquivo);
 
@@ -61,7 +66,7 @@ public class DocumentoService {
             UUID planoId,
             Classificacao classificacao
     ) {
-        acessoPlanoService.buscar(auth, planoId);
+        acessoPlanoService.buscarPlano(auth, planoId);
 
         List<DocumentoEntity> documentos = classificacao == null
                 ? documentoRepository.findAllByPlanoIdOrderByNomeAsc(planoId)
@@ -79,7 +84,7 @@ public class DocumentoService {
             UUID planoId,
             UUID documentoId
     ) {
-        acessoPlanoService.buscar(auth, planoId);
+        acessoPlanoService.buscarPlano(auth, planoId);
         return toDetalhado(buscarDocumento(planoId, documentoId));
     }
 
@@ -89,7 +94,7 @@ public class DocumentoService {
             UUID planoId,
             UUID documentoId
     ) {
-        acessoPlanoService.buscar(auth, planoId);
+        acessoPlanoService.buscarPlano(auth, planoId);
         DocumentoEntity documento = buscarDocumento(planoId, documentoId);
 
         return new DocumentoArquivoResponseDTO(
@@ -101,7 +106,11 @@ public class DocumentoService {
 
     @Transactional
     public void remover(Authentication auth, UUID planoId, UUID documentoId) {
-        acessoPlanoService.buscar(auth, planoId);
+        acessoPlanoService.buscarPlano(
+                auth,
+                planoId,
+                PermissaoPlano.GERENCIAR_DOCUMENTOS
+        );
         documentoRepository.delete(buscarDocumento(planoId, documentoId));
     }
 

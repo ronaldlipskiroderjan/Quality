@@ -3,6 +3,7 @@ package br.com.grupo5.Quality.service;
 import br.com.grupo5.Quality.database.DocumentoEntity;
 import br.com.grupo5.Quality.database.PlanoEntity;
 import br.com.grupo5.Quality.database.enums.Classificacao;
+import br.com.grupo5.Quality.database.enums.PermissaoPlano;
 import br.com.grupo5.Quality.database.repository.DocumentoRepository;
 import br.com.grupo5.Quality.dto.request.DocumentoRequestDTO;
 import br.com.grupo5.Quality.dto.response.DocumentoArquivoResponseDTO;
@@ -42,11 +43,15 @@ class DocumentoServiceTest {
     private MultipartFile arquivo;
 
     @Test
-    void deveAdicionarDocumentoAoPlanoAcessivel() throws Exception {
+    void deveAdicionarDocumentoComPermissao() throws Exception {
         PlanoEntity plano = plano();
         byte[] conteudo = {1, 2, 3};
 
-        when(acessoPlanoService.buscar(auth, plano.getId())).thenReturn(plano);
+        when(acessoPlanoService.buscarPlano(
+                auth,
+                plano.getId(),
+                PermissaoPlano.GERENCIAR_DOCUMENTOS
+        )).thenReturn(plano);
         when(arquivo.isEmpty()).thenReturn(false);
         when(arquivo.getBytes()).thenReturn(conteudo);
         when(arquivo.getOriginalFilename()).thenReturn("modelo.pdf");
@@ -81,7 +86,11 @@ class DocumentoServiceTest {
     @Test
     void deveRecusarArquivoVazio() {
         PlanoEntity plano = plano();
-        when(acessoPlanoService.buscar(auth, plano.getId())).thenReturn(plano);
+        when(acessoPlanoService.buscarPlano(
+                auth,
+                plano.getId(),
+                PermissaoPlano.GERENCIAR_DOCUMENTOS
+        )).thenReturn(plano);
         when(arquivo.isEmpty()).thenReturn(true);
 
         DocumentoRequestDTO dto = new DocumentoRequestDTO(
@@ -99,10 +108,10 @@ class DocumentoServiceTest {
     }
 
     @Test
-    void deveListarDocumentosFiltradosPorClassificacao() {
+    void deveListarDocumentosDoPlano() {
         PlanoEntity plano = plano();
         DocumentoEntity documento = documento(plano);
-        when(acessoPlanoService.buscar(auth, plano.getId())).thenReturn(plano);
+        when(acessoPlanoService.buscarPlano(auth, plano.getId())).thenReturn(plano);
         when(documentoRepository
                 .findAllByPlanoIdAndClassificacaoOrderByNomeAsc(
                         plano.getId(),
@@ -121,10 +130,10 @@ class DocumentoServiceTest {
     }
 
     @Test
-    void deveBaixarDocumentoDoPlanoAcessivel() {
+    void deveBaixarDocumentoDoPlano() {
         PlanoEntity plano = plano();
         DocumentoEntity documento = documento(plano);
-        when(acessoPlanoService.buscar(auth, plano.getId())).thenReturn(plano);
+        when(acessoPlanoService.buscarPlano(auth, plano.getId())).thenReturn(plano);
         when(documentoRepository.findByIdAndPlanoId(documento.getId(), plano.getId()))
                 .thenReturn(Optional.of(documento));
 
@@ -142,7 +151,7 @@ class DocumentoServiceTest {
     void deveInformarDocumentoAusenteNoPlano() {
         PlanoEntity plano = plano();
         UUID documentoId = UUID.randomUUID();
-        when(acessoPlanoService.buscar(auth, plano.getId())).thenReturn(plano);
+        when(acessoPlanoService.buscarPlano(auth, plano.getId())).thenReturn(plano);
         when(documentoRepository.findByIdAndPlanoId(documentoId, plano.getId()))
                 .thenReturn(Optional.empty());
 
@@ -153,10 +162,14 @@ class DocumentoServiceTest {
     }
 
     @Test
-    void deveRemoverDocumentoDoPlanoAcessivel() {
+    void deveRemoverDocumentoComPermissao() {
         PlanoEntity plano = plano();
         DocumentoEntity documento = documento(plano);
-        when(acessoPlanoService.buscar(auth, plano.getId())).thenReturn(plano);
+        when(acessoPlanoService.buscarPlano(
+                auth,
+                plano.getId(),
+                PermissaoPlano.GERENCIAR_DOCUMENTOS
+        )).thenReturn(plano);
         when(documentoRepository.findByIdAndPlanoId(documento.getId(), plano.getId()))
                 .thenReturn(Optional.of(documento));
 

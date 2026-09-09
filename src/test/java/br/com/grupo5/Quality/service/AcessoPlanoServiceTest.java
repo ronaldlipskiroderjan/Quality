@@ -1,14 +1,19 @@
 package br.com.grupo5.Quality.service;
 
+import br.com.grupo5.Quality.database.ParticipacaoPlanoEntity;
 import br.com.grupo5.Quality.database.PlanoEntity;
-import br.com.grupo5.Quality.database.repository.PlanoRepository;
+import br.com.grupo5.Quality.database.enums.PapelPlano;
+import br.com.grupo5.Quality.database.enums.PermissaoPlano;
+import br.com.grupo5.Quality.database.repository.ParticipacaoPlanoRepository;
 import br.com.grupo5.Quality.exception.NotFoundException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 
+import java.util.EnumSet;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,34 +27,92 @@ class AcessoPlanoServiceTest {
     private static final String EMAIL = "usuario@quality.com";
 
     @Mock
-    private PlanoRepository planoRepository;
+    private ParticipacaoPlanoRepository participacaoRepository;
     @Mock
     private Authentication auth;
 
     @Test
-    void deveRetornarPlanoVinculadoAoUsuario() {
-        UUID planoId = UUID.randomUUID();
-        PlanoEntity plano = PlanoEntity.builder().id(planoId).build();
+    void deveRetornarParticipacaoDoUsuario() {
+        ParticipacaoPlanoEntity participacao = participacao(PapelPlano.PARTICIPANTE);
+        UUID planoId = participacao.getPlano().getId();
         when(auth.getName()).thenReturn(EMAIL);
-        when(planoRepository.findByIdAndUsuarioEmail(planoId, EMAIL))
-                .thenReturn(Optional.of(plano));
+        when(participacaoRepository.findByPlanoIdAndUsuarioEmailIgnoreCase(
+                planoId,
+                EMAIL
+        )).thenReturn(Optional.of(participacao));
 
-        PlanoEntity response = service().buscar(auth, planoId);
+        ParticipacaoPlanoEntity response = service().buscarParticipacao(
+                auth,
+                planoId
+        );
 
-        assertSame(plano, response);
+        assertSame(participacao, response);
     }
 
     @Test
-    void naoDeveExporPlanoSemVinculoComUsuario() {
+    void naoDeveExporPlanoSemParticipacao() {
         UUID planoId = UUID.randomUUID();
         when(auth.getName()).thenReturn(EMAIL);
-        when(planoRepository.findByIdAndUsuarioEmail(planoId, EMAIL))
-                .thenReturn(Optional.empty());
+        when(participacaoRepository.findByPlanoIdAndUsuarioEmailIgnoreCase(
+                planoId,
+                EMAIL
+        )).thenReturn(Optional.empty());
 
-        assertThrows(NotFoundException.class, () -> service().buscar(auth, planoId));
+        assertThrows(
+                NotFoundException.class,
+                () -> service().buscarPlano(auth, planoId)
+        );
+    }
+
+    @Test
+    void devePermitirOperacaoAutorizadaPeloPapel() {
+        ParticipacaoPlanoEntity participacao = participacao(
+                PapelPlano.RESPONSAVEL_QUALIDADE
+        );
+        UUID planoId = participacao.getPlano().getId();
+        when(auth.getName()).thenReturn(EMAIL);
+        when(participacaoRepository.findByPlanoIdAndUsuarioEmailIgnoreCase(
+                planoId,
+                EMAIL
+        )).thenReturn(Optional.of(participacao));
+
+        PlanoEntity response = service().buscarPlano(
+                auth,
+                planoId,
+                PermissaoPlano.EDITAR
+        );
+
+        assertSame(participacao.getPlano(), response);
+    }
+
+    @Test
+    void deveNegarOperacaoSemPermissaoContextual() {
+        ParticipacaoPlanoEntity participacao = participacao(PapelPlano.AUDITOR);
+        UUID planoId = participacao.getPlano().getId();
+        when(auth.getName()).thenReturn(EMAIL);
+        when(participacaoRepository.findByPlanoIdAndUsuarioEmailIgnoreCase(
+                planoId,
+                EMAIL
+        )).thenReturn(Optional.of(participacao));
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> service().buscarPlano(
+                        auth,
+                        planoId,
+                        PermissaoPlano.EDITAR
+                )
+        );
     }
 
     private AcessoPlanoService service() {
-        return new AcessoPlanoService(planoRepository);
+        return new AcessoPlanoService(participacaoRepository);
+    }
+
+    private ParticipacaoPlanoEntity participacao(PapelPlano papel) {
+        return ParticipacaoPlanoEntity.builder()
+                .plano(PlanoEntity.builder().id(UUID.randomUUID()).build())
+                .papeis(EnumSet.of(papel))
+                .build();
     }
 }
