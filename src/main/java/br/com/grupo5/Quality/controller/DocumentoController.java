@@ -1,13 +1,17 @@
 package br.com.grupo5.Quality.controller;
 
 import br.com.grupo5.Quality.database.enums.Classificacao;
+import br.com.grupo5.Quality.dto.request.AtualizarDocumentoRequestDTO;
 import br.com.grupo5.Quality.dto.request.DocumentoRequestDTO;
 import br.com.grupo5.Quality.dto.response.DocumentoArquivoResponseDTO;
 import br.com.grupo5.Quality.dto.response.DocumentoDetalhadoResponseDTO;
 import br.com.grupo5.Quality.dto.response.DocumentoResponseDTO;
+import br.com.grupo5.Quality.dto.response.PaginaResponseDTO;
 import br.com.grupo5.Quality.service.DocumentoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -18,6 +22,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,7 +30,6 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -55,12 +59,13 @@ public class DocumentoController {
     }
 
     @GetMapping
-    public List<DocumentoResponseDTO> listar(
+    public PaginaResponseDTO<DocumentoResponseDTO> listar(
             Authentication auth,
             @PathVariable UUID planoId,
-            @RequestParam(required = false) Classificacao classificacao
+            @RequestParam(required = false) Classificacao classificacao,
+            @PageableDefault(size = 15, sort = "nome") Pageable pageable
     ) {
-        return documentoService.listar(auth, planoId, classificacao);
+        return documentoService.listar(auth, planoId, classificacao, pageable);
     }
 
     @GetMapping("/{documentoId}")
@@ -70,6 +75,16 @@ public class DocumentoController {
             @PathVariable UUID documentoId
     ) {
         return documentoService.buscar(auth, planoId, documentoId);
+    }
+
+    @PutMapping(value = "/{documentoId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public DocumentoDetalhadoResponseDTO atualizar(
+            Authentication auth,
+            @PathVariable UUID planoId,
+            @PathVariable UUID documentoId,
+            @Valid @ModelAttribute AtualizarDocumentoRequestDTO dto
+    ) {
+        return documentoService.atualizar(auth, planoId, documentoId, dto);
     }
 
     @GetMapping("/{documentoId}/arquivo")

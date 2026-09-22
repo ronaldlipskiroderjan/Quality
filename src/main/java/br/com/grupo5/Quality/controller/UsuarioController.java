@@ -3,18 +3,19 @@ package br.com.grupo5.Quality.controller;
 import br.com.grupo5.Quality.dto.request.PasswordRequestDTO;
 import br.com.grupo5.Quality.dto.request.UsuarioUpdateRequestDTO;
 import br.com.grupo5.Quality.dto.response.ImagemResponseDTO;
+import br.com.grupo5.Quality.dto.response.PaginaResponseDTO;
 import br.com.grupo5.Quality.dto.response.UsuarioAdminResponseDTO;
 import br.com.grupo5.Quality.dto.response.UsuarioResponseDTO;
 import br.com.grupo5.Quality.service.UsuarioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -49,6 +50,12 @@ public class UsuarioController {
                 .body(imagem.imagem());
     }
 
+    @DeleteMapping("/me/imagem")
+    public ResponseEntity<Void> removerImagem(Authentication auth) {
+        usuarioService.removerImagem(auth);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/me")
     public UsuarioResponseDTO buscarPerfil(Authentication auth) {
         return usuarioService.buscarPerfil(auth);
@@ -56,7 +63,7 @@ public class UsuarioController {
 
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public Page<UsuarioAdminResponseDTO> listar(
+    public PaginaResponseDTO<UsuarioAdminResponseDTO> listar(
             @PageableDefault(size = 15, sort = "nome") Pageable pageable
     ) {
         return usuarioService.listar(pageable);

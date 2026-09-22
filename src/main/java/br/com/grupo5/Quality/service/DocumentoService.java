@@ -5,13 +5,17 @@ import br.com.grupo5.Quality.database.PlanoEntity;
 import br.com.grupo5.Quality.database.enums.Classificacao;
 import br.com.grupo5.Quality.database.enums.PermissaoPlano;
 import br.com.grupo5.Quality.database.repository.DocumentoRepository;
+import br.com.grupo5.Quality.dto.request.AtualizarDocumentoRequestDTO;
 import br.com.grupo5.Quality.dto.request.DocumentoRequestDTO;
 import br.com.grupo5.Quality.dto.response.DocumentoArquivoResponseDTO;
 import br.com.grupo5.Quality.dto.response.DocumentoDetalhadoResponseDTO;
 import br.com.grupo5.Quality.dto.response.DocumentoResponseDTO;
+import br.com.grupo5.Quality.dto.response.PaginaResponseDTO;
 import br.com.grupo5.Quality.exception.InvalidRequestException;
 import br.com.grupo5.Quality.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,7 +23,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -61,21 +64,23 @@ public class DocumentoService {
     }
 
     @Transactional(readOnly = true)
-    public List<DocumentoResponseDTO> listar(
+    public PaginaResponseDTO<DocumentoResponseDTO> listar(
             Authentication auth,
             UUID planoId,
-            Classificacao classificacao
+            Classificacao classificacao,
+            Pageable pageable
     ) {
         acessoPlanoService.buscarPlano(auth, planoId);
 
-        List<DocumentoEntity> documentos = classificacao == null
-                ? documentoRepository.findAllByPlanoIdOrderByNomeAsc(planoId)
-                : documentoRepository.findAllByPlanoIdAndClassificacaoOrderByNomeAsc(
+        Page<DocumentoEntity> documentos = classificacao == null
+                ? documentoRepository.findAllByPlanoId(planoId, pageable)
+                : documentoRepository.findAllByPlanoIdAndClassificacao(
                         planoId,
-                        classificacao
+                        classificacao,
+                        pageable
                 );
 
-        return documentos.stream().map(this::toResumo).toList();
+        return PaginaResponseDTO.de(documentos.map(this::toResumo));
     }
 
     @Transactional(readOnly = true)
@@ -86,6 +91,27 @@ public class DocumentoService {
     ) {
         acessoPlanoService.buscarPlano(auth, planoId);
         return toDetalhado(buscarDocumento(planoId, documentoId));
+    }
+
+    @Transactional
+    public DocumentoDetalhadoResponseDTO atualizar(
+            Authentication auth,
+            UUID planoId,
+            UUID documentoId,
+            AtualizarDocumentoRequestDTO dto
+    ) {
+        acessoPlanoService.buscarPlano(
+                auth,
+                planoId,
+                PermissaoPlano.GERENCIAR_DOCUMENTOS
+        );
+        DocumentoEntity documento = buscarDocumento(planoId, documentoId);
+
+        documento.setNome(dto.nome().trim());
+        documento.setVersao(dto.versao().trim());
+        substituirArquivo(documento, dto.arquivo());
+
+        return toDetalhado(documentoRepository.save(documento));
     }
 
     @Transactional(readOnly = true)
@@ -111,7 +137,8 @@ public class DocumentoService {
                 planoId,
                 PermissaoPlano.GERENCIAR_DOCUMENTOS
         );
-        documentoRepository.delete(buscarDocumento(planoId, documentoId));
+        buscarDocumento(planoId, documentoId);
+        documentoRepository.excluirComDependencias(documentoId);
     }
 
     private DocumentoEntity buscarDocumento(UUID planoId, UUID documentoId) {
@@ -123,6 +150,23 @@ public class DocumentoService {
         if (arquivo.isEmpty()) {
             throw new InvalidRequestException("O arquivo não pode estar vazio.");
         }
+    }
+
+    private void substituirArquivo(
+            DocumentoEntity documento,
+            MultipartFile arquivo
+    ) {
+        if (arquivo == null) {
+            return;
+        }
+
+        validarArquivo(arquivo);
+        documento.setConteudo(lerConteudo(arquivo));
+        documento.setNomeArquivo(limparNome(arquivo));
+        documento.setTipoArquivo(
+                Optional.ofNullable(arquivo.getContentType()).orElse(TIPO_PADRAO)
+        );
+        documento.setTamanho(arquivo.getSize());
     }
 
     private byte[] lerConteudo(MultipartFile arquivo) {

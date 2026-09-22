@@ -55,6 +55,9 @@ public class PlanoEntity {
     @Column(name = "criado_em", nullable = false)
     private LocalDateTime criadoEm;
 
+    @Column(name = "tem_imagem", nullable = false)
+    private boolean temImagem;
+
     @Builder.Default
     @OneToMany(mappedBy = "plano", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ParticipacaoPlanoEntity> participacoes = new HashSet<>();
@@ -62,6 +65,15 @@ public class PlanoEntity {
     @Builder.Default
     @OneToMany(mappedBy = "plano", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<DocumentoEntity> documentos = new HashSet<>();
+
+    @Builder.Default
+    @OneToMany(mappedBy = "plano", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<ConfiguracaoClassificacaoEntity> configuracoesClassificacao =
+            new HashSet<>();
+
+    @Builder.Default
+    @OneToMany(mappedBy = "plano", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<FeriadoPlanoEntity> feriados = new HashSet<>();
 
     @Override
     public boolean equals(Object objeto) {

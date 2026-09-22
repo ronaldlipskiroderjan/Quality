@@ -8,8 +8,10 @@ import br.com.grupo5.Quality.database.enums.PermissaoPlano;
 import br.com.grupo5.Quality.database.enums.Status;
 import br.com.grupo5.Quality.database.repository.ParticipacaoPlanoRepository;
 import br.com.grupo5.Quality.database.repository.PlanoRepository;
+import br.com.grupo5.Quality.database.repository.PlanoImagemRepository;
 import br.com.grupo5.Quality.database.repository.UsuarioRepository;
 import br.com.grupo5.Quality.dto.request.PlanoRequestDTO;
+import br.com.grupo5.Quality.dto.response.PaginaResponseDTO;
 import br.com.grupo5.Quality.dto.response.PlanoDetalhadoResponseDTO;
 import br.com.grupo5.Quality.dto.response.PlanoResponseDTO;
 import br.com.grupo5.Quality.exception.NotFoundException;
@@ -18,15 +20,19 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -42,6 +48,8 @@ class PlanoServiceTest {
 
     @Mock
     private PlanoRepository planoRepository;
+    @Mock
+    private PlanoImagemRepository planoImagemRepository;
     @Mock
     private UsuarioRepository usuarioRepository;
     @Mock
@@ -77,11 +85,14 @@ class PlanoServiceTest {
         assertEquals("Quality", participacao.getPlano().getNomeProjeto());
         assertEquals(Status.PENDENTE, participacao.getPlano().getStatus());
         assertNotNull(participacao.getPlano().getCriadoEm());
-        assertTrue(participacao.possuiPapel(PapelPlano.PROPRIETARIO));
+        assertTrue(participacao.possuiPapel(PapelPlano.AUDITOR_RESPONSAVEL_QUALIDADE));
         assertTrue(participacao.possuiPermissao(PermissaoPlano.EXCLUIR));
+        assertFalse(participacao.possuiPermissao(
+                PermissaoPlano.TRATAR_NAO_CONFORMIDADE
+        ));
         assertTrue(usuario.getParticipacoes().contains(participacao));
         assertEquals(participacao.getPlano().getId(), response.id());
-        assertTrue(response.meusPapeis().contains(PapelPlano.PROPRIETARIO));
+        assertTrue(response.meusPapeis().contains(PapelPlano.AUDITOR_RESPONSAVEL_QUALIDADE));
     }
 
     @Test
@@ -99,29 +110,39 @@ class PlanoServiceTest {
     void deveListarSomentePlanosComParticipacaoDoUsuario() {
         ParticipacaoPlanoEntity primeiro = participacao(
                 plano("Projeto A", Status.PENDENTE),
-                PapelPlano.PROPRIETARIO
+                PapelPlano.AUDITOR_RESPONSAVEL_QUALIDADE
         );
         ParticipacaoPlanoEntity segundo = participacao(
                 plano("Projeto B", Status.CONCLUIDO),
-                PapelPlano.AUDITOR
+                PapelPlano.AUDITOR_RESPONSAVEL_QUALIDADE
         );
+        PageRequest pageable = PageRequest.of(0, 15);
         when(auth.getName()).thenReturn(EMAIL);
         when(participacaoRepository
-                .findAllByUsuarioEmailIgnoreCaseOrderByPlanoCriadoEmDesc(EMAIL))
-                .thenReturn(List.of(primeiro, segundo));
+                .listarPlanosVisiveis(
+                        EMAIL,
+                        java.util.EnumSet.allOf(PapelPlano.class),
+                        pageable
+                ))
+                .thenReturn(new PageImpl<>(
+                        List.of(primeiro, segundo),
+                        pageable,
+                        2
+                ));
 
-        List<PlanoResponseDTO> response = service().listar(auth);
+        PaginaResponseDTO<PlanoResponseDTO> response = service().listar(auth, pageable);
 
-        assertEquals(2, response.size());
-        assertEquals(primeiro.getPlano().getId(), response.getFirst().id());
-        assertTrue(response.get(1).meusPapeis().contains(PapelPlano.AUDITOR));
+        assertEquals(2, response.totalElementos());
+        assertEquals(0, response.pagina());
+        assertEquals(primeiro.getPlano().getId(), response.conteudo().getFirst().id());
+        assertTrue(response.conteudo().get(1).meusPapeis().contains(PapelPlano.AUDITOR_RESPONSAVEL_QUALIDADE));
     }
 
     @Test
     void deveBuscarPlanoComPapeisEPermissoes() {
         ParticipacaoPlanoEntity participacao = participacao(
                 plano("Quality", Status.PENDENTE),
-                PapelPlano.RESPONSAVEL_QUALIDADE
+                PapelPlano.AUDITOR_RESPONSAVEL_QUALIDADE
         );
         when(acessoPlanoService.buscarParticipacao(
                 auth,
@@ -135,7 +156,7 @@ class PlanoServiceTest {
 
         assertEquals(participacao.getPlano().getId(), response.id());
         assertTrue(response.meusPapeis().contains(
-                PapelPlano.RESPONSAVEL_QUALIDADE
+                PapelPlano.AUDITOR_RESPONSAVEL_QUALIDADE
         ));
         assertTrue(response.minhasPermissoes().contains(PermissaoPlano.EDITAR));
     }
@@ -145,7 +166,7 @@ class PlanoServiceTest {
         PlanoEntity plano = plano("Antigo", Status.PENDENTE);
         ParticipacaoPlanoEntity participacao = participacao(
                 plano,
-                PapelPlano.RESPONSAVEL_QUALIDADE
+                PapelPlano.AUDITOR_RESPONSAVEL_QUALIDADE
         );
         when(acessoPlanoService.buscarParticipacao(
                 auth,
@@ -191,12 +212,13 @@ class PlanoServiceTest {
 
         service().excluir(auth, plano.getId());
 
-        verify(planoRepository).delete(plano);
+        verify(planoRepository).excluirComDependencias(plano.getId());
     }
 
     private PlanoService service() {
         return new PlanoService(
                 planoRepository,
+                planoImagemRepository,
                 usuarioRepository,
                 participacaoRepository,
                 acessoPlanoService

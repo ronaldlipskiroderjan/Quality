@@ -7,6 +7,7 @@ public record UsuarioResponseDTO(
         UUID id,
         String nome,
         String email,
+        boolean temImagem,
         Set<String> roles
 ) {
 }

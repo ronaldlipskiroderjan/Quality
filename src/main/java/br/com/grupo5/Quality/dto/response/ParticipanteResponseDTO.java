@@ -12,8 +12,13 @@ public record ParticipanteResponseDTO(
         UUID usuarioId,
         String nome,
         String email,
-        Set<PapelPlano> papeis,
+        boolean temImagem,
+        PapelPlano papel,
         Set<PermissaoPlano> permissoes,
         LocalDateTime criadoEm
 ) {
+    @Deprecated
+    public Set<PapelPlano> papeis() {
+        return papel == null ? Set.of() : Set.of(papel);
+    }
 }

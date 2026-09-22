@@ -1,0 +1,100 @@
+{
+  "regions": [
+    {
+      "id": "public-header",
+      "kind": "chrome",
+      "grid": "A0:J0",
+      "note": "slim deep-navy public navigation bar"
+    },
+    {
+      "id": "brand-name",
+      "kind": "text",
+      "grid": "A0:A0",
+      "note": "Quality brand name in white"
+    },
+    {
+      "id": "public-navigation",
+      "kind": "control",
+      "grid": "B0:D0",
+      "note": "compact public section navigation"
+    },
+    {
+      "id": "header-actions",
+      "kind": "control",
+      "grid": "I0:J0",
+      "note": "sign-in link and blue create-account button"
+    },
+    {
+      "id": "hero-title",
+      "kind": "text",
+      "grid": "A1:D3",
+      "note": "large white landing-page headline over navy"
+    },
+    {
+      "id": "hero-description",
+      "kind": "text",
+      "grid": "A3:D4",
+      "note": "concise supporting copy in pale blue-gray"
+    },
+    {
+      "id": "hero-actions",
+      "kind": "control",
+      "grid": "A4:C5",
+      "note": "primary create-account and secondary sign-in actions"
+    },
+    {
+      "id": "hero-proof-points",
+      "kind": "text",
+      "grid": "A5:D6",
+      "note": "three compact product truths separated by a fine rule"
+    },
+    {
+      "id": "product-sidebar",
+      "kind": "chrome",
+      "grid": "E1:E5",
+      "note": "navy sidebar inside the product demonstration"
+    },
+    {
+      "id": "product-toolbar",
+      "kind": "chrome",
+      "grid": "F1:J1",
+      "note": "white product toolbar and audit heading"
+    },
+    {
+      "id": "product-context",
+      "kind": "chrome",
+      "grid": "F2:J3",
+      "note": "plan, reference document and auditor context panels"
+    },
+    {
+      "id": "product-checklist",
+      "kind": "chrome",
+      "grid": "F3:J5",
+      "note": "dense spreadsheet-like audit checklist with semantic states"
+    },
+    {
+      "id": "resolution-flow",
+      "kind": "chrome",
+      "grid": "E5:J6",
+      "note": "connected nonconformity, resolution team and escalation flow"
+    },
+    {
+      "id": "workflow-heading",
+      "kind": "text",
+      "grid": "A7:C8",
+      "note": "dark workflow section heading on calm blue-gray canvas"
+    },
+    {
+      "id": "workflow-description",
+      "kind": "text",
+      "grid": "A8:C9",
+      "note": "workflow explanation beneath the section heading"
+    },
+    {
+      "id": "workflow-steps",
+      "kind": "chrome",
+      "grid": "D7:J9",
+      "note": "connected plan, audit and resolution stages with directional arrows"
+    }
+  ]
+}

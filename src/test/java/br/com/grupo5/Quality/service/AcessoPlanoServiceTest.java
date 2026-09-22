@@ -33,7 +33,7 @@ class AcessoPlanoServiceTest {
 
     @Test
     void deveRetornarParticipacaoDoUsuario() {
-        ParticipacaoPlanoEntity participacao = participacao(PapelPlano.PARTICIPANTE);
+        ParticipacaoPlanoEntity participacao = participacao(PapelPlano.SUPERIOR_N1);
         UUID planoId = participacao.getPlano().getId();
         when(auth.getName()).thenReturn(EMAIL);
         when(participacaoRepository.findByPlanoIdAndUsuarioEmailIgnoreCase(
@@ -67,7 +67,7 @@ class AcessoPlanoServiceTest {
     @Test
     void devePermitirOperacaoAutorizadaPeloPapel() {
         ParticipacaoPlanoEntity participacao = participacao(
-                PapelPlano.RESPONSAVEL_QUALIDADE
+                PapelPlano.AUDITOR_RESPONSAVEL_QUALIDADE
         );
         UUID planoId = participacao.getPlano().getId();
         when(auth.getName()).thenReturn(EMAIL);
@@ -87,7 +87,9 @@ class AcessoPlanoServiceTest {
 
     @Test
     void deveNegarOperacaoSemPermissaoContextual() {
-        ParticipacaoPlanoEntity participacao = participacao(PapelPlano.AUDITOR);
+        ParticipacaoPlanoEntity participacao = participacao(
+                PapelPlano.MEMBRO_EQUIPE_RESOLUCAO
+        );
         UUID planoId = participacao.getPlano().getId();
         when(auth.getName()).thenReturn(EMAIL);
         when(participacaoRepository.findByPlanoIdAndUsuarioEmailIgnoreCase(

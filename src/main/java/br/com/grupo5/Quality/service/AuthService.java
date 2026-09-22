@@ -98,6 +98,7 @@ public class AuthService {
                 usuario.getId(),
                 usuario.getNome(),
                 usuario.getEmail(),
+                usuario.getFotoPerfil() != null,
                 roles
         );
     }
