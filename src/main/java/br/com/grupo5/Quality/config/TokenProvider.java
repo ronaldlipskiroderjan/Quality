@@ -1,5 +1,6 @@
 package br.com.grupo5.Quality.config;
 
+import br.com.grupo5.Quality.database.UsuarioEntity;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -25,15 +26,19 @@ public class TokenProvider {
 
     public String gerarToken(Authentication auth) {
         UserDetails usuario = (UserDetails) auth.getPrincipal();
-        return criarToken(usuario.getUsername());
+        String identificador = usuario instanceof UsuarioEntity entidade
+                && entidade.getId() != null
+                ? entidade.getId().toString()
+                : usuario.getUsername();
+        return criarToken(identificador);
     }
 
-    private String criarToken(String email) {
+    private String criarToken(String identificador) {
         Date agora = new Date();
         Date expiracao = new Date(agora.getTime() + expirationTime);
 
         return Jwts.builder()
-                .subject(email)
+                .subject(identificador)
                 .issuedAt(agora)
                 .expiration(expiracao)
                 .signWith(getSigningKey())

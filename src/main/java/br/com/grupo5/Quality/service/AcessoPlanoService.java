@@ -46,7 +46,8 @@ public class AcessoPlanoService {
 
     @Transactional(readOnly = true)
     public PlanoEntity buscarPlano(Authentication auth, UUID planoId) {
-        return buscarParticipacao(auth, planoId).getPlano();
+        return buscarParticipacao(auth, planoId, PermissaoPlano.VISUALIZAR)
+                .getPlano();
     }
 
     @Transactional(readOnly = true)

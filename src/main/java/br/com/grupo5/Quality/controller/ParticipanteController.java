@@ -2,11 +2,18 @@ package br.com.grupo5.Quality.controller;
 
 import br.com.grupo5.Quality.dto.request.NovoParticipanteRequestDTO;
 import br.com.grupo5.Quality.dto.request.PapeisParticipanteRequestDTO;
+import br.com.grupo5.Quality.dto.request.SuperioresPlanoRequestDTO;
+import br.com.grupo5.Quality.dto.response.ImagemResponseDTO;
+import br.com.grupo5.Quality.dto.response.PaginaResponseDTO;
 import br.com.grupo5.Quality.dto.response.ParticipanteResponseDTO;
+import br.com.grupo5.Quality.dto.response.SuperioresPlanoResponseDTO;
 import br.com.grupo5.Quality.service.ParticipanteService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,7 +26,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -49,11 +55,38 @@ public class ParticipanteController {
     }
 
     @GetMapping
-    public List<ParticipanteResponseDTO> listar(
+    public PaginaResponseDTO<ParticipanteResponseDTO> listar(
             Authentication auth,
-            @PathVariable UUID planoId
+            @PathVariable UUID planoId,
+            @PageableDefault(size = 15, sort = "criadoEm") Pageable pageable
     ) {
-        return participanteService.listar(auth, planoId);
+        return participanteService.listar(auth, planoId, pageable);
+    }
+
+    @GetMapping("/{participanteId}/imagem")
+    public ResponseEntity<byte[]> buscarImagem(
+            Authentication auth,
+            @PathVariable UUID planoId,
+            @PathVariable UUID participanteId
+    ) {
+        ImagemResponseDTO imagem = participanteService.buscarImagem(
+                auth,
+                planoId,
+                participanteId
+        );
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(imagem.contentType()))
+                .contentLength(imagem.imagem().length)
+                .body(imagem.imagem());
+    }
+
+    @PutMapping("/superiores")
+    public SuperioresPlanoResponseDTO definirSuperiores(
+            Authentication auth,
+            @PathVariable UUID planoId,
+            @Valid @RequestBody SuperioresPlanoRequestDTO dto
+    ) {
+        return participanteService.definirSuperiores(auth, planoId, dto);
     }
 
     @PutMapping("/{participanteId}")

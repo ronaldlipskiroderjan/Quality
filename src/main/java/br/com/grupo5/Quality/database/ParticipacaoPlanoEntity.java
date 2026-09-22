@@ -2,6 +2,7 @@ package br.com.grupo5.Quality.database;
 
 import br.com.grupo5.Quality.database.enums.PapelPlano;
 import br.com.grupo5.Quality.database.enums.PermissaoPlano;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -14,6 +15,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
@@ -24,6 +26,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -68,8 +71,26 @@ public class ParticipacaoPlanoEntity {
     @Column(name = "criado_em", nullable = false)
     private LocalDateTime criadoEm;
 
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean ativo = true;
+
+    @Builder.Default
+    @OneToMany(mappedBy = "auditor", cascade = CascadeType.PERSIST)
+    private Set<ArtefatoEntity> artefatosAuditados = new HashSet<>();
+
     public boolean possuiPapel(PapelPlano papel) {
         return papeis.contains(papel);
+    }
+
+    public PapelPlano getPapel() {
+        return papeis.stream().findFirst().orElse(null);
+    }
+
+    public void setPapel(PapelPlano papel) {
+        this.papeis = papel == null
+                ? EnumSet.noneOf(PapelPlano.class)
+                : EnumSet.of(papel);
     }
 
     public boolean possuiPermissao(PermissaoPlano permissao) {

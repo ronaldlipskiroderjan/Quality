@@ -16,6 +16,7 @@ public record PlanoDetalhadoResponseDTO(
         String visaoGeral,
         Status status,
         LocalDateTime criadoEm,
+        boolean temImagem,
         Set<PapelPlano> meusPapeis,
         Set<PermissaoPlano> minhasPermissoes
 ) {

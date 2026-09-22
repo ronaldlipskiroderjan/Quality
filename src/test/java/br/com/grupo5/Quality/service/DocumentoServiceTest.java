@@ -5,16 +5,20 @@ import br.com.grupo5.Quality.database.PlanoEntity;
 import br.com.grupo5.Quality.database.enums.Classificacao;
 import br.com.grupo5.Quality.database.enums.PermissaoPlano;
 import br.com.grupo5.Quality.database.repository.DocumentoRepository;
+import br.com.grupo5.Quality.dto.request.AtualizarDocumentoRequestDTO;
 import br.com.grupo5.Quality.dto.request.DocumentoRequestDTO;
 import br.com.grupo5.Quality.dto.response.DocumentoArquivoResponseDTO;
 import br.com.grupo5.Quality.dto.response.DocumentoDetalhadoResponseDTO;
 import br.com.grupo5.Quality.dto.response.DocumentoResponseDTO;
+import br.com.grupo5.Quality.dto.response.PaginaResponseDTO;
 import br.com.grupo5.Quality.exception.InvalidRequestException;
 import br.com.grupo5.Quality.exception.NotFoundException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -112,21 +116,22 @@ class DocumentoServiceTest {
         PlanoEntity plano = plano();
         DocumentoEntity documento = documento(plano);
         when(acessoPlanoService.buscarPlano(auth, plano.getId())).thenReturn(plano);
-        when(documentoRepository
-                .findAllByPlanoIdAndClassificacaoOrderByNomeAsc(
+        PageRequest pageable = PageRequest.of(0, 15);
+        when(documentoRepository.findAllByPlanoIdAndClassificacao(
                         plano.getId(),
-                        Classificacao.AUDITADO
-                ))
-                .thenReturn(List.of(documento));
+                        Classificacao.AUDITADO,
+                        pageable
+                )).thenReturn(new PageImpl<>(List.of(documento), pageable, 1));
 
-        List<DocumentoResponseDTO> response = service().listar(
+        PaginaResponseDTO<DocumentoResponseDTO> response = service().listar(
                 auth,
                 plano.getId(),
-                Classificacao.AUDITADO
+                Classificacao.AUDITADO,
+                pageable
         );
 
-        assertEquals(1, response.size());
-        assertEquals(documento.getId(), response.getFirst().id());
+        assertEquals(1, response.totalElementos());
+        assertEquals(documento.getId(), response.conteudo().getFirst().id());
     }
 
     @Test
@@ -145,6 +150,65 @@ class DocumentoServiceTest {
 
         assertEquals("modelo.pdf", response.nome());
         assertArrayEquals(new byte[]{1, 2, 3}, response.conteudo());
+    }
+
+    @Test
+    void deveAtualizarNomeEVersaoPreservandoArquivoAtual() {
+        PlanoEntity plano = plano();
+        DocumentoEntity documento = documento(plano);
+        when(acessoPlanoService.buscarPlano(
+                auth,
+                plano.getId(),
+                PermissaoPlano.GERENCIAR_DOCUMENTOS
+        )).thenReturn(plano);
+        when(documentoRepository.findByIdAndPlanoId(documento.getId(), plano.getId()))
+                .thenReturn(Optional.of(documento));
+        when(documentoRepository.save(documento)).thenReturn(documento);
+
+        DocumentoDetalhadoResponseDTO response = service().atualizar(
+                auth,
+                plano.getId(),
+                documento.getId(),
+                new AtualizarDocumentoRequestDTO(" Modelo revisado ", " 2.0 ", null)
+        );
+
+        assertEquals("Modelo revisado", response.nome());
+        assertEquals("2.0", response.versao());
+        assertEquals("modelo.pdf", response.nomeArquivo());
+        assertArrayEquals(new byte[]{1, 2, 3}, documento.getConteudo());
+    }
+
+    @Test
+    void deveAtualizarDocumentoSubstituindoArquivo() throws Exception {
+        PlanoEntity plano = plano();
+        DocumentoEntity documento = documento(plano);
+        byte[] novoConteudo = {4, 5, 6, 7};
+        when(acessoPlanoService.buscarPlano(
+                auth,
+                plano.getId(),
+                PermissaoPlano.GERENCIAR_DOCUMENTOS
+        )).thenReturn(plano);
+        when(documentoRepository.findByIdAndPlanoId(documento.getId(), plano.getId()))
+                .thenReturn(Optional.of(documento));
+        when(arquivo.isEmpty()).thenReturn(false);
+        when(arquivo.getBytes()).thenReturn(novoConteudo);
+        when(arquivo.getOriginalFilename()).thenReturn("modelo-v2.docx");
+        when(arquivo.getContentType()).thenReturn(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        );
+        when(arquivo.getSize()).thenReturn(4L);
+        when(documentoRepository.save(documento)).thenReturn(documento);
+
+        DocumentoDetalhadoResponseDTO response = service().atualizar(
+                auth,
+                plano.getId(),
+                documento.getId(),
+                new AtualizarDocumentoRequestDTO("Modelo", "2.0", arquivo)
+        );
+
+        assertEquals("modelo-v2.docx", response.nomeArquivo());
+        assertEquals(4L, response.tamanho());
+        assertArrayEquals(novoConteudo, documento.getConteudo());
     }
 
     @Test
@@ -175,7 +239,7 @@ class DocumentoServiceTest {
 
         service().remover(auth, plano.getId(), documento.getId());
 
-        verify(documentoRepository).delete(documento);
+        verify(documentoRepository).excluirComDependencias(documento.getId());
     }
 
     private DocumentoService service() {

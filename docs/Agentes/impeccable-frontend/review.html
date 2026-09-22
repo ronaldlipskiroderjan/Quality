@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Quality overview review</title>
+  <link rel="stylesheet" href="../src/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand">Quality</a>
+      <nav class="main-nav"><a class="nav-link active">Planos</a><a class="nav-link">Resoluções</a><a class="nav-link">Notificações</a></nav>
+      <div class="user-summary"><strong>Ronald Roderjan</strong><span>ronald@empresa.com</span></div>
+    </aside>
+    <main class="app-content">
+      <header class="plan-context"><div><a class="back-link">Voltar aos planos</a><h1>Portal de atendimento</h1><p>Versão 1.0 · <span class="status status-pendente">Pendente</span></p></div></header>
+      <nav class="tabs"><a class="tab-link active">Visão geral</a><a class="tab-link">Auditores</a><a class="tab-link">Documentos</a><a class="tab-link">Artefatos</a><a class="tab-link">Equipe de resolução</a></nav>
+      <section class="section-content">
+        <header class="page-header"><div><h1>Plano de Garantia da Qualidade</h1><p>Síntese organizada do plano. Use as demais abas para consultar e trabalhar cada parte em detalhes.</p></div><div class="page-actions"><button class="button button-secondary">Editar plano</button></div></header>
+        <article class="quality-plan-sheet">
+          <section class="quality-plan-section quality-plan-purpose">
+            <header class="quality-plan-section-header"><div><h2>Identificação e finalidade</h2><p>Informações que orientam a aplicação deste plano.</p></div></header>
+            <dl class="quality-plan-identification"><div><dt>Projeto</dt><dd>Portal de atendimento</dd></div><div><dt>Versão</dt><dd>1.0</dd></div><div><dt>Situação</dt><dd>Pendente</dd></div></dl>
+            <div class="quality-plan-copy"><div><h3>Objetivo</h3><p>Assegurar que os requisitos funcionais, de segurança e de acessibilidade estejam completos e verificáveis antes da publicação.</p></div><div><h3>Visão geral</h3><p>O plano reúne as normas aplicáveis, os documentos do produto, os artefatos avaliados e a cadeia responsável pelo tratamento das não conformidades.</p></div></div>
+          </section>
+          <section class="quality-plan-section">
+            <header class="quality-plan-section-header"><div><h2>Responsáveis pela qualidade</h2><p>Auditores cadastrados e cadeia definida para escalonamentos.</p></div><a class="text-button">Ver auditores</a></header>
+            <div class="quality-plan-columns"><div><h3>Auditores</h3><ul class="overview-name-list"><li>Ana Martins</li><li>Carlos Souza</li><li>Ronald Roderjan</li></ul></div><div><div class="overview-subsection-heading"><h3>Escalonamento</h3><button class="text-button">Configurar</button></div><dl class="overview-compact-details"><div><dt>Superior N1</dt><dd>Marina Oliveira</dd></div><div><dt>Superior N2</dt><dd>Paulo Mendes</dd></div></dl></div></div>
+          </section>
+          <section class="quality-plan-section">
+            <header class="quality-plan-section-header"><div><h2>Documentação aplicável</h2><p>Documentos que orientam a avaliação e documentos submetidos à auditoria.</p></div><a class="text-button">Ver documentos</a></header>
+            <div class="quality-plan-columns"><div><h3>Documentos de referência</h3><ul class="overview-name-list"><li>ISO 9001</li><li>Padrão corporativo de segurança</li><li>Modelo de especificação funcional</li></ul></div><div><h3>Documentos auditados</h3><ul class="overview-name-list"><li>Especificação funcional</li><li>Plano de testes</li></ul></div></div>
+          </section>
+          <section class="quality-plan-section">
+            <header class="quality-plan-section-header"><div><h2>Itens e artefatos avaliados</h2><p>Artefatos organizados conforme o documento auditado ao qual pertencem.</p></div><a class="text-button">Ver artefatos</a></header>
+            <div class="overview-artifact-groups"><section class="overview-artifact-group"><h3>Especificação funcional</h3><ul class="overview-name-list"><li>Requisitos de autenticação</li><li>Fluxo de recuperação de senha</li></ul></section><section class="overview-artifact-group"><h3>Plano de testes</h3><ul class="overview-name-list"><li>Cenários críticos de regressão</li></ul></section></div>
+          </section>
+          <section class="quality-plan-section">
+            <header class="quality-plan-section-header"><div><h2>Classificações de não conformidade</h2><p>Prazos aplicados a partir do envio da não conformidade à equipe.</p></div><button class="text-button">Configurar</button></header>
+            <ul class="classification-list overview-classifications"><li><span>Simples</span><strong>1 dia e 4 horas</strong></li><li><span>Complexa</span><strong>3 dias</strong></li><li><span>Severa</span><strong>5 dias e 12 horas</strong></li><li><span>Extrema</span><strong>8 horas</strong></li></ul>
+          </section>
+        </article>
+        <div class="danger-zone"><h2>Ações do plano</h2><div class="form-actions"><button class="button button-secondary">Concluir plano</button><button class="button button-danger">Excluir plano</button></div></div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

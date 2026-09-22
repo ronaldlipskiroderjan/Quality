@@ -4,6 +4,7 @@ import br.com.grupo5.Quality.database.UsuarioEntity;
 import br.com.grupo5.Quality.database.repository.UsuarioRepository;
 import br.com.grupo5.Quality.dto.request.PasswordRequestDTO;
 import br.com.grupo5.Quality.dto.request.UsuarioUpdateRequestDTO;
+import br.com.grupo5.Quality.dto.response.PaginaResponseDTO;
 import br.com.grupo5.Quality.dto.response.ImagemResponseDTO;
 import br.com.grupo5.Quality.dto.response.UsuarioAdminResponseDTO;
 import br.com.grupo5.Quality.dto.response.UsuarioResponseDTO;
@@ -11,7 +12,6 @@ import br.com.grupo5.Quality.exception.AlreadyExistsException;
 import br.com.grupo5.Quality.exception.InvalidRequestException;
 import br.com.grupo5.Quality.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -28,6 +28,13 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class UsuarioService {
+
+    private static final long TAMANHO_MAXIMO_IMAGEM = 5 * 1024 * 1024;
+    private static final Set<String> TIPOS_IMAGEM_PERMITIDOS = Set.of(
+            "image/jpeg",
+            "image/png",
+            "image/webp"
+    );
 
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
@@ -50,21 +57,29 @@ public class UsuarioService {
         return new ImagemResponseDTO(usuario.getTipoImagem(), usuario.getFotoPerfil());
     }
 
+    @Transactional
+    public void removerImagem(Authentication auth) {
+        UsuarioEntity usuario = buscarUsuario(auth);
+        usuario.setFotoPerfil(null);
+        usuario.setTipoImagem(null);
+        usuarioRepository.save(usuario);
+    }
+
     @Transactional(readOnly = true)
     public UsuarioResponseDTO buscarPerfil(Authentication auth) {
         return toResponse(buscarUsuario(auth));
     }
 
     @Transactional(readOnly = true)
-    public Page<UsuarioAdminResponseDTO> listar(Pageable pageable) {
-        return usuarioRepository.findAll(pageable)
+    public PaginaResponseDTO<UsuarioAdminResponseDTO> listar(Pageable pageable) {
+        return PaginaResponseDTO.de(usuarioRepository.findAll(pageable)
                 .map(usuario -> new UsuarioAdminResponseDTO(
                         usuario.getId(),
                         usuario.getNome(),
                         usuario.getEmail(),
                         usuario.isAtivo(),
                         usuario.getCriadoEm()
-                ));
+                )));
     }
 
     @Transactional
@@ -107,8 +122,16 @@ public class UsuarioService {
 
     private void validarImagem(MultipartFile imagem) {
         String tipo = imagem.getContentType();
-        if (imagem.isEmpty() || tipo == null || !tipo.startsWith("image/")) {
-            throw new InvalidRequestException("Envie um arquivo de imagem válido.");
+        if (imagem.isEmpty() || tipo == null
+                || !TIPOS_IMAGEM_PERMITIDOS.contains(tipo.toLowerCase(Locale.ROOT))) {
+            throw new InvalidRequestException(
+                    "Envie uma imagem JPG, PNG ou WebP."
+            );
+        }
+        if (imagem.getSize() > TAMANHO_MAXIMO_IMAGEM) {
+            throw new InvalidRequestException(
+                    "A imagem de perfil deve possuir no máximo 5 MB."
+            );
         }
     }
 
@@ -129,6 +152,7 @@ public class UsuarioService {
                 usuario.getId(),
                 usuario.getNome(),
                 usuario.getEmail(),
+                usuario.getFotoPerfil() != null,
                 roles
         );
     }

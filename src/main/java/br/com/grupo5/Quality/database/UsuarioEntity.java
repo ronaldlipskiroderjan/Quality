@@ -9,7 +9,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
@@ -59,17 +58,8 @@ public class UsuarioEntity implements UserDetails {
     @Column(name = "tipo_imagem")
     private String tipoImagem;
 
-    @Lob
     @Column(name = "foto_perfil", columnDefinition = "BYTEA")
     private byte[] fotoPerfil;
-
-    @Builder.Default
-    @OneToMany(mappedBy = "auditor", fetch = FetchType.LAZY)
-    private Set<ArtefatoEntity> artefatos = new HashSet<>();
-
-    @Builder.Default
-    @OneToMany(mappedBy = "responsavel", fetch = FetchType.LAZY)
-    private Set<ItemChecklistEntity> naoConformidades = new HashSet<>();
 
     @Builder.Default
     @OneToMany(

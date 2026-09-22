@@ -1,0 +1,3 @@
+UPDATE participacao_plano_papeis
+SET papel = 'AUDITOR_RESPONSAVEL_QUALIDADE'
+WHERE papel IN ('AUDITOR', 'RESPONSAVEL_QUALIDADE');

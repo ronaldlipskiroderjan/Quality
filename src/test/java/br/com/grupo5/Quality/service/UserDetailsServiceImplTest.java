@@ -9,6 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -29,6 +30,19 @@ class UserDetailsServiceImplTest {
         UserDetailsServiceImpl service = new UserDetailsServiceImpl(usuarioRepository);
 
         assertSame(usuario, service.loadUserByUsername(EMAIL));
+    }
+
+    @Test
+    void deveCarregarUsuarioPeloIdDoToken() {
+        UUID usuarioId = UUID.randomUUID();
+        UsuarioEntity usuario = UsuarioEntity.builder()
+                .id(usuarioId)
+                .email(EMAIL)
+                .build();
+        when(usuarioRepository.findById(usuarioId)).thenReturn(Optional.of(usuario));
+        UserDetailsServiceImpl service = new UserDetailsServiceImpl(usuarioRepository);
+
+        assertSame(usuario, service.loadUserByUsername(usuarioId.toString()));
     }
 
     @Test

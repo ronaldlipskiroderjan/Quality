@@ -1,0 +1,2 @@
+ALTER TABLE participacoes_plano
+    ADD COLUMN ativo BOOLEAN NOT NULL DEFAULT TRUE;

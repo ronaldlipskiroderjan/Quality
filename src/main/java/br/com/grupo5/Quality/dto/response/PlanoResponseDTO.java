@@ -14,6 +14,7 @@ public record PlanoResponseDTO(
         String versao,
         Status status,
         LocalDateTime criadoEm,
+        boolean temImagem,
         Set<PapelPlano> meusPapeis,
         Set<PermissaoPlano> minhasPermissoes
 ) {

@@ -4,6 +4,7 @@ import br.com.grupo5.Quality.database.UsuarioEntity;
 import br.com.grupo5.Quality.database.repository.UsuarioRepository;
 import br.com.grupo5.Quality.dto.request.PasswordRequestDTO;
 import br.com.grupo5.Quality.dto.request.UsuarioUpdateRequestDTO;
+import br.com.grupo5.Quality.dto.response.PaginaResponseDTO;
 import br.com.grupo5.Quality.dto.response.ImagemResponseDTO;
 import br.com.grupo5.Quality.dto.response.UsuarioAdminResponseDTO;
 import br.com.grupo5.Quality.dto.response.UsuarioResponseDTO;
@@ -28,6 +29,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -56,6 +58,7 @@ class UsuarioServiceTest {
         prepararUsuario(usuario);
         when(imagem.isEmpty()).thenReturn(false);
         when(imagem.getContentType()).thenReturn("image/png");
+        when(imagem.getSize()).thenReturn(3L);
         when(imagem.getBytes()).thenReturn(conteudo);
 
         service().salvarImagem(auth, imagem);
@@ -69,6 +72,19 @@ class UsuarioServiceTest {
     void deveRecusarArquivoQueNaoSejaImagem() {
         when(imagem.isEmpty()).thenReturn(false);
         when(imagem.getContentType()).thenReturn("application/pdf");
+
+        assertThrows(
+                InvalidRequestException.class,
+                () -> service().salvarImagem(auth, imagem)
+        );
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void deveRecusarImagemMaiorQueCincoMegabytes() {
+        when(imagem.isEmpty()).thenReturn(false);
+        when(imagem.getContentType()).thenReturn("image/png");
+        when(imagem.getSize()).thenReturn(5L * 1024 * 1024 + 1);
 
         assertThrows(
                 InvalidRequestException.class,
@@ -98,6 +114,20 @@ class UsuarioServiceTest {
     }
 
     @Test
+    void deveRemoverImagemDePerfil() {
+        UsuarioEntity usuario = usuario();
+        usuario.setTipoImagem("image/png");
+        usuario.setFotoPerfil(new byte[]{1, 2, 3});
+        prepararUsuario(usuario);
+
+        service().removerImagem(auth);
+
+        assertNull(usuario.getFotoPerfil());
+        assertNull(usuario.getTipoImagem());
+        verify(usuarioRepository).save(usuario);
+    }
+
+    @Test
     void deveRetornarPerfilDoUsuario() {
         UsuarioEntity usuario = usuario();
         prepararUsuario(usuario);
@@ -107,6 +137,7 @@ class UsuarioServiceTest {
         assertEquals(usuario.getId(), response.id());
         assertEquals("Usuário", response.nome());
         assertEquals(EMAIL, response.email());
+        assertEquals(false, response.temImagem());
     }
 
     @Test
@@ -116,10 +147,10 @@ class UsuarioServiceTest {
         Page<UsuarioEntity> pagina = new PageImpl<>(List.of(usuario), pageable, 1);
         when(usuarioRepository.findAll(pageable)).thenReturn(pagina);
 
-        Page<UsuarioAdminResponseDTO> response = service().listar(pageable);
+        PaginaResponseDTO<UsuarioAdminResponseDTO> response = service().listar(pageable);
 
-        assertEquals(1, response.getTotalElements());
-        assertEquals(usuario.getId(), response.getContent().getFirst().id());
+        assertEquals(1, response.totalElementos());
+        assertEquals(usuario.getId(), response.conteudo().getFirst().id());
     }
 
     @Test
