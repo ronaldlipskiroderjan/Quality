@@ -1,5 +1,8 @@
 name: quality
 
+server:
+  port: ${PORT:8080}
+
 services:
   db:
     image: postgres:18-alpine
